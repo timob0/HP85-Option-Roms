@@ -1,0 +1,3447 @@
+CAPASM  Version 1.0.1       January 2024                     2026-10-16 23:22:22
+(c) Joachim Siebold 2020
+
+    1 000000             ! ============================================================
+    2 000000             ! PRINTER85 v0.01a -- STANDALONE LOADBIN SPLIT
+    3 000000             !
+    4 000000             ! Extracted from the hardware-tested combined SIMON85 v0.11e source.
+    5 000000             ! This is the verification-stage LOADBIN build prior to conversion to an
+    6 000000             ! HP-85 Option ROM.  Printer algorithms and keyboard behavior are kept
+    7 000000             ! logically unchanged from the combined build.
+    8 000000             !
+    9 000000             ! Public keywords:
+   10 000000             !
+   11 000000             !       PVER
+   12 000000             !       PRTSCREEN device,driver[,zoom[,orientation]]
+   13 000000             !       PRTSET    device,driver[,zoom[,orientation]]
+   14 000000             !       PRTKEYS   mode
+   15 000000             !
+   16 000000             ! Driver 1 = HP ThinkJet 2225A
+   17 000000             ! Driver 2 = SII IFD501 / CAPD345A
+   18 000000             !
+   19 000000             ! PRINTER85 is deliberately independent of SIMON85.  It has its own CRT row
+   20 000000             ! reader, raster buffers, printer profile, HP-IB transport and CHIDLE state.
+   21 000000             ! No SIMON85-local symbol or writable workspace is referenced.
+   22 000000             ! ============================================================
+   23 000000             
+   24 000000 120 122 124         NAM PRT85
+      000003 070 065 040 
+      000006 002 000 000 
+      000011 000 000 000 
+      000014 000 000 000 
+      000017 000 000 000 
+      000022 000 000 000 
+      000025 000 000 000 
+      000030 000 000 
+   25 000032             
+   26 000032 056 000             DEF RUNTIM
+   27 000034 072 000             DEF ASCIIS
+   28 000036 044 000             DEF PARSE
+   29 000040 124 000             DEF ERMSG
+   30 000042 125 000             DEF INIT
+   31 000044             
+   32 000044             
+   33 000044             ! ============================================================
+   34 000044             ! TABLES
+   35 000044             ! ============================================================
+   36 000044             
+   37 000044 000 000     PARSE   BYT 0,0
+   38 000046 261 000             DEF PVERP
+   39 000050 327 000             DEF PRNSCP      ! PRTSCREEN
+   40 000052 327 000             DEF PRNSCP      ! PRTSET: same argument syntax / validation
+   41 000054 275 000             DEF PKEYSP      ! PRTKEYS mode
+   42 000056             
+   43 000056 000 000     RUNTIM  BYT 0,0
+   44 000060 016 001             DEF PVER.
+   45 000062 212 004             DEF PRNSCR.
+   46 000064 266 001             DEF PSET.
+   47 000066 036 001             DEF PKEYS.
+   48 000070 377 377             BYT 377,377
+   49 000072             
+   50 000072 120 126 105 ASCIIS  ASP "PVER"
+      000075 322 
+   51 000076 120 122 124         ASP "PRTSCREEN"
+      000101 123 103 122 
+      000104 105 105 316 
+   52 000107 120 122 124         ASP "PRTSET"
+Page    1                                                             
+CAPASM
+
+      000112 123 105 324 
+   53 000115 120 122 124         ASP "PRTKEYS"
+      000120 113 105 131 
+      000123 323 
+   54 000124             
+   55 000124 377         ERMSG   BYT 377
+   56 000125             
+   57 000125             ! ============================================================
+   58 000125             ! INIT -- LOADBIN keyboard-hook/profile lifecycle
+   59 000125             !
+   60 000125             ! PRTKEYS remains opt-in.  LOADBIN initializes only PRINTER85 private state;
+   61 000125             ! SCRATCH/LOAD restores the exact saved CHIDLE bytes if our hook is active.
+   62 000125             ! ============================================================
+   63 000125             
+   64 000125 230         INIT    BIN
+   65 000126 134 260 231         LDBD R34,=ROMFL
+      000131 202 
+   66 000132             
+   67 000132 310 003             CMB R34,=3
+   68 000134 367 011             JZR KIINIT
+   69 000136             
+   70 000136 310 002             CMB R34,=2
+   71 000140 367 035             JZR KIUNLD
+   72 000142             
+   73 000142 310 005             CMB R34,=5
+   74 000144 367 031             JZR KIUNLD
+   75 000146             
+   76 000146 236                 RTN
+   77 000147             
+   78 000147             
+   79 000147             ! LOADBIN: initialise only persistent hook/profile state.  CHIDLE itself is
+   80 000147             ! deliberately untouched.
+   81 000147             
+   82 000147 134 261 233 KIINIT  LDMD R34,=BINTAB
+      000152 202 
+   83 000153             
+   84 000153 140 251 216         LDM R40,=KHACT
+      000156 015 
+   85 000157 034 303             ADM R40,R34
+   86 000161 136 223             CLM R36
+   87 000163 040 246             STBD R36,R40
+   88 000165             
+   89 000165             ! No keyboard printer destination is assumed at LOADBIN.  PRTSET must make
+   90 000165             ! the profile valid explicitly.
+   91 000165             
+   92 000165 140 251 227         LDM R40,=HCVLD
+      000170 015 
+   93 000171 034 303             ADM R40,R34
+   94 000173 136 040 246         STBD R36,R40
+   95 000176             
+   96 000176 236                 RTN
+   97 000177             
+   98 000177             
+   99 000177             ! SCRATCH / LOAD de-initialization: if our hook is active, restore the exact
+  100 000177             ! previous seven-byte CHIDLE image.  No error is raised from INIT.
+  101 000177             
+  102 000177 134 261 233 KIUNLD  LDMD R34,=BINTAB
+      000202 202 
+  103 000203             
+  104 000203 140 251 216         LDM R40,=KHACT
+      000206 015 
+  105 000207 034 303             ADM R40,R34
+  106 000211 136 040 244         LDBD R36,R40
+  107 000214 310 000             CMB R36,=0
+Page    2                                                             
+CAPASM
+
+  108 000216 367 040             JZR KIRTN
+  109 000220             
+  110 000220 140 251 220         LDM R40,=KHSAVE
+      000223 015 
+  111 000224 034 303             ADM R40,R34
+  112 000226 142 251 016         LDM R42,=CHIDLE
+      000231 205 
+  113 000232 136 250 007         LDB R36,=7
+  114 000235             
+  115 000235 144 040 340 KIRLOP  POBD R44,+R40
+  116 000240 042 344             PUBD R44,+R42
+  117 000242 136 212             DCB R36
+  118 000244 366 367             JNZ KIRLOP
+  119 000246             
+  120 000246 140 251 216         LDM R40,=KHACT
+      000251 015 
+  121 000252 034 303             ADM R40,R34
+  122 000254 136 222             CLB R36
+  123 000256 040 246             STBD R36,R40
+  124 000260             
+  125 000260 236         KIRTN   RTN
+  126 000261             
+  127 000261             
+  128 000261             ! ============================================================
+  129 000261             ! PVER PARSER
+  130 000261             ! ============================================================
+  131 000261             
+  132 000261 147 043 240 PVERP   LDB R47,R43
+  133 000264             
+  134 000264 145 250 371         LDB R45,=371
+  135 000267 012 345             PUMD R45,+R12
+  136 000271             
+  137 000271 316 262 022         JSB =SCAN
+  138 000274             
+  139 000274 236                 RTN
+  140 000275             
+  141 000275             ! ============================================================
+  142 000275             ! PRTKEYS PARSER
+  143 000275             !
+  144 000275             !       PRTKEYS mode
+  145 000275             !
+  146 000275             ! One required numeric expression.
+  147 000275             ! ============================================================
+  148 000275             
+  149 000275 143 006 344 PKEYSP  PUBD R43,+R6
+  150 000300             
+  151 000300 316 007 025         JSB =NUMVP
+  152 000303 370 002             JEN PKPOK
+  153 000305 360 011             JMP PKPERR
+  154 000307             
+  155 000307 147 006 342 PKPOK   POBD R47,-R6
+  156 000312             
+  157 000312 145 250 371         LDB R45,=371
+  158 000315 012 345             PUMD R45,+R12
+  159 000317             
+  160 000317 236                 RTN
+  161 000320             
+  162 000320 147 006 342 PKPERR  POBD R47,-R6
+  163 000323             
+  164 000323 316 211 015         JSB =ERRORP
+  165 000326 121                 BYT 81D
+  166 000327             
+  167 000327             
+  168 000327             ! ============================================================
+Page    3                                                             
+CAPASM
+
+  169 000327             ! PRTSCREEN / PRTSET PARSER
+  170 000327             !
+  171 000327             !       PRTSCREEN device,driver[,zoom[,orientation]]
+  172 000327             !
+  173 000327             ! The first two numeric expressions are required.  Optional third and
+  174 000327             ! fourth expressions use the same trailing-comma pattern as CIRCLE.
+  175 000327             ! Runtime distinguishes 2/3/4 REAL arguments from R12 versus TOS.
+  176 000327             ! ============================================================
+  177 000327             
+  178 000327 143 006 344 PRNSCP  PUBD R43,+R6
+  179 000332             
+  180 000332 316 007 025         JSB =NUMVP
+  181 000335 370 002             JEN PN1OK
+  182 000337 360 045             JMP PNERR
+  183 000341             
+  184 000341 316 014 027 PN1OK   JSB =GETCM
+  185 000344 316 012 025         JSB =NUMVAL
+  186 000347 371 035             JEZ PNERR
+  187 000351             
+  188 000351             ! Optional zoom?  054 octal is comma.
+  189 000351             
+  190 000351 114 310 054         CMB R14,=54
+  191 000354 366 017             JNZ PNDONE
+  192 000356             
+  193 000356 316 007 025         JSB =NUMVP
+  194 000361 371 023             JEZ PNERR
+  195 000363             
+  196 000363             ! Optional orientation?
+  197 000363             
+  198 000363 114 310 054         CMB R14,=54
+  199 000366 366 005             JNZ PNDONE
+  200 000370             
+  201 000370 316 007 025         JSB =NUMVP
+  202 000373 371 011             JEZ PNERR
+  203 000375             
+  204 000375 147 006 342 PNDONE  POBD R47,-R6
+  205 000400             
+  206 000400 145 250 371         LDB R45,=371
+  207 000403 012 345             PUMD R45,+R12
+  208 000405             
+  209 000405 236                 RTN
+  210 000406             
+  211 000406 147 006 342 PNERR   POBD R47,-R6
+  212 000411             
+  213 000411 316 211 015         JSB =ERRORP
+  214 000414 121                 BYT 81D
+  215 000415             
+  216 000415             
+  217 000415             ! ============================================================
+  218 000415             ! PVER RUNTIME
+  219 000415             ! ============================================================
+  220 000415             
+  221 000415 241                 BYT 241
+  222 000416             
+  223 000416 126 251 352 PVER.   LDM R26,=HMSG
+      000421 014 
+  224 000422 323 233 202         ADMD R26,=BINTAB
+  225 000425             
+  226 000425 136 251 020         LDM R36,=16D,0
+      000430 000 
+  227 000431             
+  228 000431 316 052 072         JSB =OUTSTR
+  229 000434             
+  230 000434 236                 RTN
+Page    4                                                             
+CAPASM
+
+  231 000435             
+  232 000435             ! ============================================================
+  233 000435             ! PRTKEYS RUNTIME -- v0.11b keyboard takeover control
+  234 000435             !
+  235 000435             !       PRTKEYS 1    install PRINTER85 COPY/PAPER CHIDLE hook
+  236 000435             !       PRTKEYS 0    restore the exact previously saved CHIDLE bytes
+  237 000435             !
+  238 000435             ! PRTKEYS does not choose a printer.  Configure the independent keyboard
+  239 000435             ! hardcopy profile first with PRTSET.  If no valid PRTSET profile exists,
+  240 000435             ! COPY/PAPER are still consumed but produce no external-printer action.
+  241 000435             !
+  242 000435             ! All non-COPY/PAPER keys remain under normal HP-85 handling.
+  243 000435             ! ============================================================
+  244 000435             
+  245 000435 241                 BYT 241
+  246 000436             
+  247 000436 232         PKEYS.  SAD
+  248 000437 230                 BIN
+  249 000440 114 261 233         LDMD R14,=BINTAB
+      000443 202 
+  250 000444             
+  251 000444 316 215 134         JSB =ONER
+  252 000447 230                 BIN
+  253 000450 014 267 206         STMD R#,X14,PKMODE
+      000453 015 
+  254 000454             
+  255 000454 160 265 206         LDMD R60,X14,PKMODE
+      000457 015 
+  256 000460 316 321 110         JSB =CONINT
+  257 000463 230                 BIN
+  258 000464 114 261 233         LDMD R14,=BINTAB
+      000467 202 
+  259 000470             
+  260 000470             ! Require an unsigned one-byte value and accept only 0 or 1.
+  261 000470             
+  262 000470 120 077 240         LDB R20,R77
+  263 000473 366 011             JNZ PKBAD
+  264 000475             
+  265 000475 176 310 000         CMB R76,=0
+  266 000500 367 115             JZR PKOFF
+  267 000502             
+  268 000502 310 001             CMB R76,=1
+  269 000504 367 004             JZR PKON
+  270 000506             
+  271 000506 316 211 015 PKBAD   JSB =ERRORP
+  272 000511 131                 BYT 89D
+  273 000512             
+  274 000512             
+  275 000512             ! PRTKEYS 1 is idempotent.  If PRINTER85 already owns CHIDLE, return without
+  276 000512             ! touching the installed hook.
+  277 000512             
+  278 000512 120 014 264 PKON    LDBD R20,X14,KHACT
+      000515 216 015 
+  279 000517 310 000             CMB R20,=0
+  280 000521 366 137             JNZ PKRET
+  281 000523             
+  282 000523             ! Refuse to mask a foreign CHIDLE user.  The documented idle state begins
+  283 000523             ! with RTN (0236 octal).  We do not chain hooks in this diagnostic build.
+  284 000523             
+  285 000523 260 016 205         LDBD R20,=CHIDLE
+  286 000526 310 236             CMB R20,=236
+  287 000530 366 354             JNZ PKBAD
+  288 000532             
+  289 000532             ! Save all seven general-hook bytes, not merely the four bytes used by our
+Page    5                                                             
+CAPASM
+
+  290 000532             ! JSB/RTN stub, so PRTKEYS 0 can restore the exact prior image.
+  291 000532             
+  292 000532 134 251 016         LDM R34,=CHIDLE
+      000535 205 
+  293 000536 136 251 220         LDM R36,=KHSAVE
+      000541 015 
+  294 000542 323 233 202         ADMD R36,=BINTAB
+  295 000545 120 250 007         LDB R20,=7
+  296 000550             
+  297 000550 122 034 340 PKSVLP  POBD R22,+R34
+  298 000553 036 344             PUBD R22,+R36
+  299 000555 120 212             DCB R20
+  300 000557 366 367             JNZ PKSVLP
+  301 000561             
+  302 000561             ! Install the documented CHIDLE form: JSB absolute KHOOK ; RTN.
+  303 000561             ! This is the same construction used by HP's GCURSOR sample program.
+  304 000561             
+  305 000561 114 261 233         LDMD R14,=BINTAB
+      000564 202 
+  306 000565 146 251 354         LDM R46,=KHOOK
+      000570 001 
+  307 000571 014 303             ADM R46,R14
+  308 000573 045 243             STM R46,R45
+  309 000575 147 250 236         LDB R47,=236
+  310 000600 144 250 316         LDB R44,=316
+  311 000603 263 016 205         STMD R44,=CHIDLE
+  312 000606             
+  313 000606 120 250 001         LDB R20,=1
+  314 000611 014 266 216         STBD R20,X14,KHACT
+      000614 015 
+  315 000615 360 043             JMP PKRET
+  316 000617             
+  317 000617             
+  318 000617             ! PRTKEYS 0: restore the saved seven bytes only when PRINTER85 installed them.
+  319 000617             
+  320 000617 120 014 264 PKOFF   LDBD R20,X14,KHACT
+      000622 216 015 
+  321 000624 310 000             CMB R20,=0
+  322 000626 367 032             JZR PKRET
+  323 000630             
+  324 000630 134 251 220         LDM R34,=KHSAVE
+      000633 015 
+  325 000634 303                 ADM R34,R14
+  326 000635 136 251 016         LDM R36,=CHIDLE
+      000640 205 
+  327 000641 120 250 007         LDB R20,=7
+  328 000644             
+  329 000644 122 034 340 PKRSLP  POBD R22,+R34
+  330 000647 036 344             PUBD R22,+R36
+  331 000651 120 212             DCB R20
+  332 000653 366 367             JNZ PKRSLP
+  333 000655             
+  334 000655 222                 CLB R20
+  335 000656 014 266 216         STBD R20,X14,KHACT
+      000661 015 
+  336 000662             
+  337 000662 230         PKRET   BIN
+  338 000663 237                 PAD
+  339 000664 236                 RTN
+  340 000665             
+  341 000665             
+  342 000665             ! ============================================================
+  343 000665             ! PRTSET RUNTIME -- stored keyboard hardcopy profile
+  344 000665             !
+Page    6                                                             
+CAPASM
+
+  345 000665             !       PRTSET device,driver[,zoom[,orientation]]
+  346 000665             !
+  347 000665             ! Uses the same PSARGS validation as PRTSCREEN, then copies the validated
+  348 000665             ! byte values into a persistent profile used only by physical COPY/PAPER.
+  349 000665             ! PRTSCREEN never modifies the stored HC* profile.
+  350 000665             ! ============================================================
+  351 000665             
+  352 000665 241                 BYT 241
+  353 000666             
+  354 000666 232         PSET.   SAD
+  355 000667 230                 BIN
+  356 000670 114 261 233         LDMD R14,=BINTAB
+      000673 202 
+  357 000674             
+  358 000674 014 306 232         JSB X14,PSARGS
+      000677 004 
+  359 000700             
+  360 000700 230                 BIN
+  361 000701 114 261 233         LDMD R14,=BINTAB
+      000704 202 
+  362 000705             
+  363 000705 120 014 264         LDBD R20,X14,PSCODE
+      000710 342 015 
+  364 000712 266 230 015         STBD R20,X14,HCCODE
+  365 000715 264 343 015         LDBD R20,X14,PSADDR
+  366 000720 266 231 015         STBD R20,X14,HCADDR
+  367 000723 264 344 015         LDBD R20,X14,PSDRIV
+  368 000726 266 232 015         STBD R20,X14,HCDRIV
+  369 000731 264 345 015         LDBD R20,X14,PSZVAL
+  370 000734 266 233 015         STBD R20,X14,HCZOOM
+  371 000737 264 346 015         LDBD R20,X14,PSOVAL
+  372 000742 266 234 015         STBD R20,X14,HCORI
+  373 000745             
+  374 000745 250 001             LDB R20,=1
+  375 000747 266 227 015         STBD R20,X14,HCVLD
+  376 000752             
+  377 000752 237                 PAD
+  378 000753 236                 RTN
+  379 000754             
+  380 000754             
+  381 000754             ! ------------------------------------------------------------
+  382 000754             ! KHOOK -- v0.11d inherited v0.11c functional COPY/PAPER CHIDLE handler.
+  383 000754             !
+  384 000754             ! COPY          = 0211 octal
+  385 000754             ! PAPER ADVANCE = 0212 octal
+  386 000754             !
+  387 000754             ! Other keys immediately RTN to normal HP-85 handling.
+  388 000754             ! ------------------------------------------------------------
+  389 000754             
+  390 000754 230         KHOOK   BIN
+  391 000755 114 261 233         LDMD R14,=BINTAB
+      000760 202 
+  392 000761 122 260 271         LDBD R22,=KEYHIT
+      000764 201 
+  393 000765             
+  394 000765 310 211             CMB R22,=211
+  395 000767 367 005             JZR KHCAP
+  396 000771             
+  397 000771 310 212             CMB R22,=212
+  398 000773 367 064             JZR KHPAP
+  399 000775             
+  400 000775 236         KHRET   RTN
+  401 000776             
+  402 000776             
+Page    7                                                             
+CAPASM
+
+  403 000776             ! ------------------------------------------------------------
+  404 000776             ! COPY
+  405 000776             ! ------------------------------------------------------------
+  406 000776             
+  407 000776 230         KHCAP   BIN
+  408 000777             
+  409 000777             ! Mark the key handled before starting potentially long printer I/O.
+  410 000777             
+  411 000777 235                 CLE
+  412 001000 316 372 071         JSB =EOJ2
+  413 001003             
+  414 001003 230                 BIN
+  415 001004 114 261 233         LDMD R14,=BINTAB
+      001007 202 
+  416 001010 120 014 264         LDBD R20,X14,HCVLD
+      001013 227 015 
+  417 001015 310 000             CMB R20,=0
+  418 001017 367 027             JZR KHCREL
+  419 001021             
+  420 001021 306 327 002         JSB X14,HCLOAD
+  421 001024             
+  422 001024             ! CRTWRS bit 7: 0=alpha, 1=graphics.
+  423 001024             
+  424 001024 137 260 016         LDBD R37,=CRTWRS
+      001027 202 
+  425 001030 317 200             ANM R37,=200
+  426 001032 310 000             CMB R37,=0
+  427 001034 367 006             JZR KHCTXT
+  428 001036             
+  429 001036             ! Graphics COPY uses the existing v0.10j PRTSCREEN execution path with the
+  430 001036             ! validated PRTSET profile already copied to PS* state.
+  431 001036             
+  432 001036 014 306 375         JSB X14,KGRAPH
+      001041 002 
+  433 001042 360 004             JMP KHCREL
+  434 001044             
+  435 001044 014 306 266 KHCTXT  JSB X14,TXTCOPY
+      001047 003 
+  436 001050             
+  437 001050 014 306 230 KHCREL  JSB X14,KHREL
+      001053 002 
+  438 001054             
+  439 001054             ! Keep the handled-key exit local; a relative JMP to the common exit exceeded
+  440 001054             ! CAPASM's branch range in v0.11b.
+  441 001054             
+  442 001054 144 006 343         POMD R44,-R6
+  443 001057 235                 CLE
+  444 001060 236                 RTN
+  445 001061             
+  446 001061             
+  447 001061             ! ------------------------------------------------------------
+  448 001061             ! PAPER ADVANCE
+  449 001061             ! ------------------------------------------------------------
+  450 001061             
+  451 001061 230         KHPAP   BIN
+  452 001062 114 261 233         LDMD R14,=BINTAB
+      001065 202 
+  453 001066             
+  454 001066             ! Preserve only the hardware-verified SHIFT discriminator needed after EOJ2.
+  455 001066             ! On the tested HP-85A, KEYSTS bit 3 (010 octal) is clear for PAPER ADVANCE
+  456 001066             ! and set for SHIFT+PAPER ADVANCE.
+  457 001066             
+  458 001066 137 260 002         LDBD R37,=KEYSTS
+      001071 377 
+Page    8                                                             
+CAPASM
+
+  459 001072 317 010             ANM R37,=10
+  460 001074 014 266 217         STBD R37,X14,KSHIFT
+      001077 015 
+  461 001100             
+  462 001100 235                 CLE
+  463 001101 316 372 071         JSB =EOJ2
+  464 001104             
+  465 001104 230                 BIN
+  466 001105 114 261 233         LDMD R14,=BINTAB
+      001110 202 
+  467 001111 120 014 264         LDBD R20,X14,HCVLD
+      001114 227 015 
+  468 001116 310 000             CMB R20,=0
+  469 001120 367 075             JZR KHPREL
+  470 001122             
+  471 001122 306 327 002         JSB X14,HCLOAD
+  472 001125 014 306 007         JSB X14,HCOPEN
+      001130 003 
+  473 001131             
+  474 001131             ! Dispatch from the single private bit sampled before EOJ2.
+  475 001131             
+  476 001131 114 261 233         LDMD R14,=BINTAB
+      001134 202 
+  477 001135 137 014 264         LDBD R37,X14,KSHIFT
+      001140 217 015 
+  478 001142 310 000             CMB R37,=0
+  479 001144 366 033             JNZ KHPPAG
+  480 001146             
+  481 001146             ! Normal PAPER ADVANCE: send one LF immediately, then generate our own repeat
+  482 001146             ! while KEYSTS says the physical key is still held.
+  483 001146             
+  484 001146 306 036 003         JSB X14,HCLINE
+  485 001151 014 306 242         JSB X14,KFSLW
+      001154 002 
+  486 001155 122 310 000         CMB R22,=0
+  487 001160 367 027             JZR KHPCLS
+  488 001162             
+  489 001162 014 306 036 KHPREP  JSB X14,HCLINE
+      001165 003 
+  490 001166 014 306 273         JSB X14,KFFST
+      001171 002 
+  491 001172 122 310 000         CMB R22,=0
+  492 001175 366 363             JNZ KHPREP
+  493 001177 360 010             JMP KHPCLS
+  494 001201             
+  495 001201             ! SHIFT+PAPER ADVANCE: one page-advance command only; no repeat.
+  496 001201             
+  497 001201 014 306 063 KHPPAG  JSB X14,HCPAGE
+      001204 003 
+  498 001205 014 306 230         JSB X14,KHREL
+      001210 002 
+  499 001211             
+  500 001211 014 306 140 KHPCLS  JSB X14,HCCLOSE
+      001214 003 
+  501 001215 360 004             JMP KPEOJ
+  502 001217             
+  503 001217 014 306 230 KHPREL  JSB X14,KHREL
+      001222 002 
+  504 001223             
+  505 001223 144 006 343 KPEOJ   POMD R44,-R6
+  506 001226 235                 CLE
+  507 001227 236                 RTN
+  508 001230             
+  509 001230             
+Page    9                                                             
+CAPASM
+
+  510 001230             ! ------------------------------------------------------------
+  511 001230             ! KHREL -- wait until the physical key is released.
+  512 001230             ! Returns only when KEYSTS low bit indicates "not depressed".
+  513 001230             ! ------------------------------------------------------------
+  514 001230             
+  515 001230 130 260 002 KHREL   LDBD R30,=KEYSTS
+      001233 377 
+  516 001234 206                 LRB R30
+  517 001235 363 002             JEV KHRRT
+  518 001237 360 367             JMP KHREL
+  519 001241             
+  520 001241 236         KHRRT   RTN
+  521 001242             
+  522 001242             
+  523 001242             ! ------------------------------------------------------------
+  524 001242             ! KFSLW / KFFST -- release-aware PAPER repeat delays.
+  525 001242             !
+  526 001242             ! These are intentionally simple CPU delays for the first functional build.
+  527 001242             ! They can be tuned after physical timing tests without touching printer I/O.
+  528 001242             !
+  529 001242             ! Return:
+  530 001242             !       R22 = 0  key released during delay
+  531 001242             !       R22 = 1  key still held after delay
+  532 001242             ! ------------------------------------------------------------
+  533 001242             
+  534 001242 120 250 200 KFSLW   LDB R20,=200
+  535 001245             
+  536 001245 130 260 002 KFSO    LDBD R30,=KEYSTS
+      001250 377 
+  537 001251 206                 LRB R30
+  538 001252 363 050             JEV KFDREL
+  539 001254             
+  540 001254 121 250 377         LDB R21,=377
+  541 001257 121 212     KFSI    DCB R21
+  542 001261 366 374             JNZ KFSI
+  543 001263 120 212             DCB R20
+  544 001265 366 356             JNZ KFSO
+  545 001267             
+  546 001267 122 250 001         LDB R22,=1
+  547 001272 236                 RTN
+  548 001273             
+  549 001273             
+  550 001273 120 250 030 KFFST   LDB R20,=30
+  551 001276             
+  552 001276 130 260 002 KFFO    LDBD R30,=KEYSTS
+      001301 377 
+  553 001302 206                 LRB R30
+  554 001303 363 017             JEV KFDREL
+  555 001305             
+  556 001305 121 250 377         LDB R21,=377
+  557 001310 121 212     KFFI    DCB R21
+  558 001312 366 374             JNZ KFFI
+  559 001314 120 212             DCB R20
+  560 001316 366 356             JNZ KFFO
+  561 001320             
+  562 001320 122 250 001         LDB R22,=1
+  563 001323 236                 RTN
+  564 001324             
+  565 001324 122 222     KFDREL  CLB R22
+  566 001326 236                 RTN
+  567 001327             
+  568 001327             
+  569 001327             ! ------------------------------------------------------------
+  570 001327             ! HCLOAD -- copy stored PRTSET profile to the existing PRTSCREEN PS* state.
+Page   10                                                             
+CAPASM
+
+  571 001327             ! ------------------------------------------------------------
+  572 001327             
+  573 001327 230         HCLOAD  BIN
+  574 001330 114 261 233         LDMD R14,=BINTAB
+      001333 202 
+  575 001334             
+  576 001334 120 014 264         LDBD R20,X14,HCCODE
+      001337 230 015 
+  577 001341 266 342 015         STBD R20,X14,PSCODE
+  578 001344 264 231 015         LDBD R20,X14,HCADDR
+  579 001347 266 343 015         STBD R20,X14,PSADDR
+  580 001352 264 232 015         LDBD R20,X14,HCDRIV
+  581 001355 266 344 015         STBD R20,X14,PSDRIV
+  582 001360 264 233 015         LDBD R20,X14,HCZOOM
+  583 001363 266 345 015         STBD R20,X14,PSZVAL
+  584 001366 264 234 015         LDBD R20,X14,HCORI
+  585 001371 266 346 015         STBD R20,X14,PSOVAL
+  586 001374             
+  587 001374 236                 RTN
+  588 001375             
+  589 001375             
+  590 001375             ! ------------------------------------------------------------
+  591 001375             ! KGRAPH -- enter existing v0.10j graphics hardcopy execution path.
+  592 001375             !
+  593 001375             ! PSSTRT is the shared internal hardcopy subroutine used by both physical
+  594 001375             ! graphics COPY and the BASIC PRTSCREEN wrapper.
+  595 001375             ! ------------------------------------------------------------
+  596 001375             
+  597 001375 230         KGRAPH  BIN
+  598 001376 114 261 233         LDMD R14,=BINTAB
+      001401 202 
+  599 001402             
+  600 001402             ! PSSTRT is a shared internal subroutine.  Physical graphics COPY and the
+  601 001402             ! BASIC PRTSCREEN wrapper both call the same verified hardcopy executor.
+  602 001402             
+  603 001402 014 306 255         JSB X14,PSSTRT
+      001405 005 
+  604 001406 236                 RTN
+  605 001407             
+  606 001407             
+  607 001407             ! ------------------------------------------------------------
+  608 001407             ! HCOPEN -- begin raw text/control output using current PS* device profile.
+  609 001407             ! No HPOUT transaction remains active when this routine returns.
+  610 001407             ! ------------------------------------------------------------
+  611 001407             
+  612 001407 230         HCOPEN  BIN
+  613 001410 114 261 233         LDMD R14,=BINTAB
+      001413 202 
+  614 001414 014 306 354         JSB X14,HPIB7
+      001417 006 
+  615 001420 134 250 020         LDB R34,=20
+  616 001423 135 222             CLB R35
+  617 001425 014 306 076         JSB X14,HPCTRL
+      001430 007 
+  618 001431 014 306 130         JSB X14,HPADRO
+      001434 007 
+  619 001435 236                 RTN
+  620 001436             
+  621 001436             
+  622 001436             ! ------------------------------------------------------------
+  623 001436             ! HCLINE -- send one ASCII LF (0Ah = 012 octal).
+  624 001436             ! HCOPEN must already have been called.
+  625 001436             ! ------------------------------------------------------------
+  626 001436             
+Page   11                                                             
+CAPASM
+
+  627 001436 230         HCLINE  BIN
+  628 001437 114 261 233         LDMD R14,=BINTAB
+      001442 202 
+  629 001443 130 251 001         LDM R30,=1,0
+      001446 000 
+  630 001447 132 251 372         LDM R32,=HCLF
+      001452 014 
+  631 001453 323 233 202         ADMD R32,=BINTAB
+  632 001456 014 306 161         JSB X14,HPOUT
+      001461 007 
+  633 001462 236                 RTN
+  634 001463             
+  635 001463             
+  636 001463             ! ------------------------------------------------------------
+  637 001463             ! HCPAGE -- driver-specific page advance.
+  638 001463             !
+  639 001463             ! ThinkJet: ASCII FF (0Ch = 014 octal)
+  640 001463             ! SII:      ESC d 66 (66 decimal = 0102 octal lines)
+  641 001463             ! ------------------------------------------------------------
+  642 001463             
+  643 001463 230         HCPAGE  BIN
+  644 001464 114 261 233         LDMD R14,=BINTAB
+      001467 202 
+  645 001470 120 014 264         LDBD R20,X14,PSDRIV
+      001473 344 015 
+  646 001475 310 001             CMB R20,=1
+  647 001477 367 017             JZR HCPGTJ
+  648 001501             
+  649 001501 130 251 003         LDM R30,=3D,0
+      001504 000 
+  650 001505 132 251 374         LDM R32,=SIIPG
+      001510 014 
+  651 001511 323 233 202         ADMD R32,=BINTAB
+  652 001514 306 161 007         JSB X14,HPOUT
+  653 001517 236                 RTN
+  654 001520             
+  655 001520 130 251 001 HCPGTJ  LDM R30,=1,0
+      001523 000 
+  656 001524 132 251 373         LDM R32,=HCFF
+      001527 014 
+  657 001530 323 233 202         ADMD R32,=BINTAB
+  658 001533 014 306 161         JSB X14,HPOUT
+      001536 007 
+  659 001537 236                 RTN
+  660 001540             
+  661 001540             
+  662 001540             ! ------------------------------------------------------------
+  663 001540             ! HCCLOSE -- raw text/control cleanup.
+  664 001540             !
+  665 001540             ! ThinkJet uses the intended explicit UNLISTEN + CR16=2 path.
+  666 001540             ! SII uses the hardened v0.10i2 delayed double CR16=2 restore and deliberately
+  667 001540             ! does not send explicit UNLISTEN.
+  668 001540             ! ------------------------------------------------------------
+  669 001540             
+  670 001540 230         HCCLOSE BIN
+  671 001541 114 261 233         LDMD R14,=BINTAB
+      001544 202 
+  672 001545 120 014 264         LDBD R20,X14,PSDRIV
+      001550 344 015 
+  673 001552 310 001             CMB R20,=1
+  674 001554 367 062             JZR HCTJCL
+  675 001556             
+  676 001556             ! SII cleanup.
+  677 001556             
+Page   12                                                             
+CAPASM
+
+  678 001556 306 252 006         JSB X14,SIDELAY
+  679 001561             
+  680 001561 230                 BIN
+  681 001562 114 261 233         LDMD R14,=BINTAB
+      001565 202 
+  682 001566 014 306 354         JSB X14,HPIB7
+      001571 006 
+  683 001572 134 250 020         LDB R34,=20
+  684 001575 135 250 002         LDB R35,=2
+  685 001600 014 306 076         JSB X14,HPCTRL
+      001603 007 
+  686 001604             
+  687 001604 014 306 271         JSB X14,SIDLY2
+      001607 006 
+  688 001610             
+  689 001610 230                 BIN
+  690 001611 114 261 233         LDMD R14,=BINTAB
+      001614 202 
+  691 001615 014 306 354         JSB X14,HPIB7
+      001620 006 
+  692 001621 134 250 020         LDB R34,=20
+  693 001624 135 250 002         LDB R35,=2
+  694 001627 014 306 076         JSB X14,HPCTRL
+      001632 007 
+  695 001633             
+  696 001633 014 306 271         JSB X14,SIDLY2
+      001636 006 
+  697 001637 236                 RTN
+  698 001640             
+  699 001640             ! ThinkJet cleanup.
+  700 001640             
+  701 001640 014 306 354 HCTJCL  JSB X14,HPIB7
+      001643 006 
+  702 001644 135 250 077         LDB R35,=77
+  703 001647 014 306 052         JSB X14,HPSNDC
+      001652 007 
+  704 001653 134 250 020         LDB R34,=20
+  705 001656 135 250 002         LDB R35,=2
+  706 001661 014 306 076         JSB X14,HPCTRL
+      001664 007 
+  707 001665 236                 RTN
+  708 001666             
+  709 001666             
+  710 001666             ! ------------------------------------------------------------
+  711 001666             ! TXTCOPY -- copy the currently visible HP-85 alpha screen as printer text.
+  712 001666             !
+  713 001666             ! Visible alpha display = 16 rows x 32 characters.
+  714 001666             ! CRTRAM is the current display start/home nibble address.
+  715 001666             ! One alpha character occupies two CRT nibble addresses.
+  716 001666             !
+  717 001666             ! Each printer row is:
+  718 001666             !       32 display characters + CR + LF = 34 bytes
+  719 001666             !
+  720 001666             ! Underline/cursor bit 7 is cleared from each CRT character.
+  721 001666             ! ------------------------------------------------------------
+  722 001666             
+  723 001666 230         TXTCOPY BIN
+  724 001667 114 261 233         LDMD R14,=BINTAB
+      001672 202 
+  725 001673             
+  726 001673             ! Preserve caller's current CRT byte pointer.
+  727 001673             
+  728 001673 120 261 176         LDMD R20,=CRTBYT
+      001676 200 
+Page   13                                                             
+CAPASM
+
+  729 001677 014 267 200         STMD R20,X14,SAVCRT
+      001702 020 
+  730 001703             
+  731 001703             ! Select normal or wipeout-safe CRT read entry exactly as the graphics path.
+  732 001703             
+  733 001703 121 222             CLB R21
+  734 001705 120 260 016         LDBD R20,=CRTWRS
+      001710 202 
+  735 001711 206                 LRB R20
+  736 001712 220                 TSB R20
+  737 001713 363 003             JEV TXCRMD
+  738 001715 121 250 001         LDB R21,=1
+  739 001720             
+  740 001720 121 014 266 TXCRMD  STBD R21,X14,CRTFLG
+      001723 202 020 
+  741 001725             
+  742 001725             ! Start at the actual currently displayed alpha home address.
+  743 001725             
+  744 001725 146 261 200         LDMD R46,=CRTRAM
+      001730 200 
+  745 001731 267 235 015         STMD R46,X14,TXTADR
+  746 001734             
+  747 001734 120 250 020         LDB R20,=20
+  748 001737 266 237 015         STBD R20,X14,TXTROWS
+  749 001742             
+  750 001742 306 007 003         JSB X14,HCOPEN
+  751 001745             
+  752 001745             
+  753 001745             ! Tiny outer loop.  Keeping the JNZ next to the counter is the same structural
+  754 001745             ! rule used elsewhere in PRINTER85 when a worker body exceeds relative range.
+  755 001745             
+  756 001745 014 306 006 TXTLP   JSB X14,TXT1ROW
+      001750 004 
+  757 001751             
+  758 001751 230                 BIN
+  759 001752 114 261 233         LDMD R14,=BINTAB
+      001755 202 
+  760 001756 120 014 264         LDBD R20,X14,TXTROWS
+      001761 237 015 
+  761 001763 212                 DCB R20
+  762 001764 266 237 015         STBD R20,X14,TXTROWS
+  763 001767 366 354             JNZ TXTLP
+  764 001771             
+  765 001771 306 140 003         JSB X14,HCCLOSE
+  766 001774             
+  767 001774 230                 BIN
+  768 001775 114 261 233         LDMD R14,=BINTAB
+      002000 202 
+  769 002001 014 306 240         JSB X14,PREST
+      002004 014 
+  770 002005 236                 RTN
+  771 002006             
+  772 002006             
+  773 002006             ! ------------------------------------------------------------
+  774 002006             ! TXT1ROW -- build and transmit one visible 32-character alpha row.
+  775 002006             ! Also advances TXTADR to the following alpha row with 010000-octal wrap.
+  776 002006             ! ------------------------------------------------------------
+  777 002006             
+  778 002006 230         TXT1ROW BIN
+  779 002007 114 261 233         LDMD R14,=BINTAB
+      002012 202 
+  780 002013 146 014 265         LDMD R46,X14,TXTADR
+      002016 235 015 
+  781 002020             
+Page   14                                                             
+CAPASM
+
+  782 002020 134 046 240         LDB R34,R46
+  783 002023 135 047 240         LDB R35,R47
+  784 002026 316 022 073         JSB =BYTCR!
+  785 002031             
+  786 002031 230                 BIN
+  787 002032 114 261 233         LDMD R14,=BINTAB
+      002035 202 
+  788 002036 134 251 240         LDM R34,=TXTBUF
+      002041 015 
+  789 002042 323 233 202         ADMD R34,=BINTAB
+  790 002045 122 250 040         LDB R22,=40
+  791 002050             
+  792 002050 120 014 264         LDBD R20,X14,CRTFLG
+      002053 202 020 
+  793 002055 310 000             CMB R20,=0
+  794 002057 367 020             JZR TXRNOR
+  795 002061             
+  796 002061             
+  797 002061             ! Wiped/off read path.
+  798 002061             
+  799 002061 316 220 072 TXRFST  JSB =INCHR-
+  800 002064 137 032 240         LDB R37,R32
+  801 002067 317 177             ANM R37,=177
+  802 002071 034 344             PUBD R37,+R34
+  803 002073 122 212             DCB R22
+  804 002075 366 362             JNZ TXRFST
+  805 002077 360 016             JMP TXEOL
+  806 002101             
+  807 002101             
+  808 002101             ! Normal CRT read path.
+  809 002101             
+  810 002101 316 244 072 TXRNOR  JSB =INCHR
+  811 002104 137 032 240         LDB R37,R32
+  812 002107 317 177             ANM R37,=177
+  813 002111 034 344             PUBD R37,+R34
+  814 002113 122 212             DCB R22
+  815 002115 366 362             JNZ TXRNOR
+  816 002117             
+  817 002117             
+  818 002117             ! Add CR/LF and send this complete text row.
+  819 002117             
+  820 002117 137 250 015 TXEOL   LDB R37,=15
+  821 002122 034 344             PUBD R37,+R34
+  822 002124 250 012             LDB R37,=12
+  823 002126 344                 PUBD R37,+R34
+  824 002127             
+  825 002127 230                 BIN
+  826 002130 114 261 233         LDMD R14,=BINTAB
+      002133 202 
+  827 002134 130 251 042         LDM R30,=34D,0
+      002137 000 
+  828 002140 132 251 240         LDM R32,=TXTBUF
+      002143 015 
+  829 002144 323 233 202         ADMD R32,=BINTAB
+  830 002147 014 306 161         JSB X14,HPOUT
+      002152 007 
+  831 002153             
+  832 002153             ! Advance one 32-character alpha row = 64 decimal = 0100 octal nibble
+  833 002153             ! addresses.  Explicitly wrap 010000 -> 000000 so a visible page may straddle
+  834 002153             ! the end of the four-page alpha ring without entering graphics memory.
+  835 002153             
+  836 002153 230                 BIN
+  837 002154 114 261 233         LDMD R14,=BINTAB
+      002157 202 
+Page   15                                                             
+CAPASM
+
+  838 002160 146 014 265         LDMD R46,X14,TXTADR
+      002163 235 015 
+  839 002165 313 100 000         ADM R46,=100,0
+  840 002170             
+  841 002170 156 046 241         LDM R56,R46
+  842 002173 315 000 020         SBM R56,=0,20
+  843 002176 364 003             JNG TXADOK
+  844 002200 146 056 241         LDM R46,R56
+  845 002203             
+  846 002203 146 014 267 TXADOK  STMD R46,X14,TXTADR
+      002206 235 015 
+  847 002210 236                 RTN
+  848 002211             
+  849 002211             
+  850 002211             ! ============================================================
+  851 002211             ! PRTSCREEN RUNTIME -- v0.10h1 generic HP-IB selector + ThinkJet/SII
+  852 002211             !
+  853 002211             !       PRTSCREEN device,driver[,zoom[,orientation]]
+  854 002211             !
+  855 002211             !       zoom        = 1 normal (default), 2 = 2x, 4 = 4x
+  856 002211             !       orientation = 0 portrait/direct (default), 1 landscape/CW
+  857 002211             !
+  858 002211             ! Driver 1 = HP ThinkJet 2225A.  Driver 2 = SII IFD501 / CAPD345A.
+  859 002211             ! ============================================================
+  860 002211             
+  861 002211 241                 BYT 241
+  862 002212             
+  863 002212 232         PRNSCR. SAD
+  864 002213 230                 BIN
+  865 002214 114 261 233         LDMD R14,=BINTAB
+      002217 202 
+  866 002220             
+  867 002220 014 306 232         JSB X14,PSARGS
+      002223 004 
+  868 002224 014 306 255         JSB X14,PSSTRT
+      002227 005 
+  869 002230             
+  870 002230             ! Successful PRTSCREEN remains deliberately silent in v0.11d.
+  871 002230             
+  872 002230 237                 PAD
+  873 002231 236                 RTN
+  874 002232             
+  875 002232             
+  876 002232             ! ------------------------------------------------------------
+  877 002232             ! PSARGS -- common PRTSCREEN / PRTSET argument extraction and validation.
+  878 002232             !
+  879 002232             ! Input:
+  880 002232             !       2, 3 or 4 REAL arguments already on the BASIC operating stack
+  881 002232             !
+  882 002232             ! Output:
+  883 002232             !       PSCODE / PSADDR / PSDRIV / PSZVAL / PSOVAL validated
+  884 002232             ! ------------------------------------------------------------
+  885 002232             
+  886 002232 230         PSARGS  BIN
+  887 002233 114 261 233         LDMD R14,=BINTAB
+      002236 202 
+  888 002237             
+  889 002237             ! Defaults for omitted optional arguments.
+  890 002237             
+  891 002237 120 250 001         LDB R20,=1
+  892 002242 014 266 345         STBD R20,X14,PSZVAL
+      002245 015 
+  893 002246 222                 CLB R20
+  894 002247 266 346 015         STBD R20,X14,PSOVAL
+Page   16                                                             
+CAPASM
+
+  895 002252             
+  896 002252             ! Determine whether 4, 3 or 2 REAL arguments are present.
+  897 002252             ! Four REALs = 32 decimal = 040 octal bytes on R12.
+  898 002252             ! Three REALs = 24 decimal = 030 octal.
+  899 002252             ! Two REALs   = 16 decimal = 020 octal.
+  900 002252             
+  901 002252 012 241             LDM R20,R12
+  902 002254 315 040 000         SBM R20,=40,0
+  903 002257 321 132 202         CMMD R20,=TOS
+  904 002262 367 024             JZR PSA4
+  905 002264             
+  906 002264 241                 LDM R20,R12
+  907 002265 315 030 000         SBM R20,=30,0
+  908 002270 321 132 202         CMMD R20,=TOS
+  909 002273 367 062             JZR PSA3
+  910 002275             
+  911 002275 241                 LDM R20,R12
+  912 002276 315 020 000         SBM R20,=20,0
+  913 002301 321 132 202         CMMD R20,=TOS
+  914 002304 367 132             JZR PSA2
+  915 002306             
+  916 002306 360 124             JMP PSE1
+  917 002310             
+  918 002310             ! Four args: orientation is on top of the operating stack.
+  919 002310             
+  920 002310 316 215 134 PSA4    JSB =ONER
+  921 002313 230                 BIN
+  922 002314 014 267 332         STMD R#,X14,PSORI
+      002317 015 
+  923 002320             
+  924 002320 160 265 332         LDMD R60,X14,PSORI
+      002323 015 
+  925 002324 316 321 110         JSB =CONINT
+  926 002327 230                 BIN
+  927 002330 114 261 233         LDMD R14,=BINTAB
+      002333 202 
+  928 002334 120 077 240         LDB R20,R77
+  929 002337 366 073             JNZ PSE1
+  930 002341 176 310 000         CMB R76,=0
+  931 002344 367 004             JZR PSO0
+  932 002346 310 001             CMB R76,=1
+  933 002350 366 062             JNZ PSE1
+  934 002352 176 014 266 PSO0    STBD R76,X14,PSOVAL
+      002355 346 015 
+  935 002357             
+  936 002357             ! Three or four args: zoom is next.
+  937 002357             
+  938 002357 316 215 134 PSA3    JSB =ONER
+  939 002362 230                 BIN
+  940 002363 014 267 322         STMD R#,X14,PSZOOM
+      002366 015 
+  941 002367             
+  942 002367 160 265 322         LDMD R60,X14,PSZOOM
+      002372 015 
+  943 002373 316 321 110         JSB =CONINT
+  944 002376 230                 BIN
+  945 002377 114 261 233         LDMD R14,=BINTAB
+      002402 202 
+  946 002403 120 077 240         LDB R20,R77
+  947 002406 366 024             JNZ PSE1
+  948 002410 176 310 001         CMB R76,=1
+  949 002413 367 010             JZR PSZOK
+  950 002415 310 002             CMB R76,=2
+  951 002417 367 004             JZR PSZOK
+Page   17                                                             
+CAPASM
+
+  952 002421 310 004             CMB R76,=4
+  953 002423 366 007             JNZ PSE1
+  954 002425 176 014 266 PSZOK   STBD R76,X14,PSZVAL
+      002430 345 015 
+  955 002432             
+  956 002432             ! Optional-argument validation completed.
+  957 002432 360 004             JMP PSA2
+  958 002434             
+  959 002434 316 211 015 PSE1    JSB =ERRORP
+  960 002437 131                 BYT 89D
+  961 002440             
+  962 002440             ! Required arguments, reverse order: driver then device.
+  963 002440             
+  964 002440 316 215 134 PSA2    JSB =ONER
+  965 002443 230                 BIN
+  966 002444 014 267 312         STMD R#,X14,PSDRV
+      002447 015 
+  967 002450             
+  968 002450 316 215 134         JSB =ONER
+  969 002453 230                 BIN
+  970 002454 014 267 302         STMD R#,X14,PSDEV
+      002457 015 
+  971 002460             
+  972 002460             ! Validate driver as integer 1 or 2.
+  973 002460             
+  974 002460 160 265 312         LDMD R60,X14,PSDRV
+      002463 015 
+  975 002464 316 321 110         JSB =CONINT
+  976 002467 230                 BIN
+  977 002470 114 261 233         LDMD R14,=BINTAB
+      002473 202 
+  978 002474 120 077 240         LDB R20,R77
+  979 002477 366 150             JNZ PSBAD
+  980 002501 176 310 001         CMB R76,=1
+  981 002504 367 004             JZR PSDRV1
+  982 002506 310 002             CMB R76,=2
+  983 002510 366 137             JNZ PSBAD
+  984 002512             
+  985 002512 176 014 266 PSDRV1  STBD R76,X14,PSDRIV
+      002515 344 015 
+  986 002517             
+  987 002517             ! Decode the standard HP BASIC device selector:
+  988 002517             !
+  989 002517             !       selector = 100 * select_code + primary_address
+  990 002517             !
+  991 002517             ! Supported translator select codes are 3..10; HP-IB primary address
+  992 002517             ! must be 0..30.  Examples: 311 -> SC3/address11, 702 -> SC7/address2.
+  993 002517             !
+  994 002517             ! Repeated subtraction by 100 keeps the code small and independent of
+  995 002517             ! any new division helper.  The largest valid selector is 1030.
+  996 002517             
+  997 002517 160 265 302         LDMD R60,X14,PSDEV
+      002522 015 
+  998 002523 316 321 110         JSB =CONINT
+  999 002526 230                 BIN
+ 1000 002527 114 261 233         LDMD R14,=BINTAB
+      002532 202 
+ 1001 002533             
+ 1002 002533             ! CONINT result is R76/R77.  Reject negative selectors.
+ 1003 002533             
+ 1004 002533 146 076 241         LDM R46,R76
+ 1005 002536 156 046 241         LDM R56,R46
+ 1006 002541 315 000 000         SBM R56,=0,0
+ 1007 002544 364 103             JNG PSBAD
+Page   18                                                             
+CAPASM
+
+ 1008 002546             
+ 1009 002546             ! R46/R47 = running remainder; R20 = select-code quotient.
+ 1010 002546             
+ 1011 002546 120 222             CLB R20
+ 1012 002550             
+ 1013 002550 156 046 241 PSDCLP  LDM R56,R46
+ 1014 002553 315 144 000         SBM R56,=100D,0
+ 1015 002556 364 007             JNG PSDCDN
+ 1016 002560             
+ 1017 002560 146 056 241         LDM R46,R56
+ 1018 002563 120 210             ICB R20
+ 1019 002565 360 361             JMP PSDCLP
+ 1020 002567             
+ 1021 002567 230         PSDCDN  BIN
+ 1022 002570 114 261 233         LDMD R14,=BINTAB
+      002573 202 
+ 1023 002574             
+ 1024 002574             ! Select code must be 3..10.
+ 1025 002574             
+ 1026 002574 121 020 240         LDB R21,R20
+ 1027 002577 314 003             SBB R21,=3
+ 1028 002601 364 046             JNG PSBAD
+ 1029 002603             
+ 1030 002603 250 012             LDB R21,=10D
+ 1031 002605 304                 SBB R21,R20
+ 1032 002606 364 041             JNG PSBAD
+ 1033 002610             
+ 1034 002610             ! Primary address is the remainder and must be 0..30.
+ 1035 002610             
+ 1036 002610 156 251 036         LDM R56,=30D,0
+      002613 000 
+ 1037 002614 046 305             SBM R56,R46
+ 1038 002616 364 031             JNG PSBAD
+ 1039 002620             
+ 1040 002620 120 014 266         STBD R20,X14,PSCODE
+      002623 342 015 
+ 1041 002625 146 266 343         STBD R46,X14,PSADDR
+      002630 015 
+ 1042 002631             
+ 1043 002631             ! Driver 2 targets the 576-dot CAPD345A.  zoom 4 would be wider than
+ 1044 002631             ! the mechanism in both portrait (1024 dots) and landscape (768 dots),
+ 1045 002631             ! so reject that combination before touching interface/CRT state.
+ 1046 002631             
+ 1047 002631 120 264 344         LDBD R20,X14,PSDRIV
+      002634 015 
+ 1048 002635 310 001             CMB R20,=1
+ 1049 002637 367 007             JZR PSARGOK
+ 1050 002641             
+ 1051 002641 264 345 015         LDBD R20,X14,PSZVAL
+ 1052 002644 310 004             CMB R20,=4
+ 1053 002646 367 001             JZR PSBAD
+ 1054 002650             
+ 1055 002650 236         PSARGOK RTN
+ 1056 002651             
+ 1057 002651 316 211 015 PSBAD   JSB =ERRORP
+ 1058 002654 131                 BYT 89D
+ 1059 002655             
+ 1060 002655             ! Sample CRT read mode and preserve caller's CRT byte pointer.
+ 1061 002655             !
+ 1062 002655             ! CRTFLG=1 means CRTWRS wipeout bit 1 was already set, so the fast INCHR-
+ 1063 002655             ! read path is already safe and the caller's CRT state must be left alone.
+ 1064 002655             ! PSAUTO is cleared here and set only if driver 2 itself calls CRTPOF.
+ 1065 002655             
+ 1066 002655 121 250 000 PSSTRT  LDB R21,=0
+Page   19                                                             
+CAPASM
+
+ 1067 002660 120 260 016         LDBD R20,=CRTWRS
+      002663 202 
+ 1068 002664 206                 LRB R20
+ 1069 002665 220                 TSB R20
+ 1070 002666 363 003             JEV PSCRSV
+ 1071 002670 121 250 001         LDB R21,=1
+ 1072 002673             
+ 1073 002673 114 261 233 PSCRSV  LDMD R14,=BINTAB
+      002676 202 
+ 1074 002677 121 014 266         STBD R21,X14,CRTFLG
+      002702 202 020 
+ 1075 002704 120 222             CLB R20
+ 1076 002706 266 347 015         STBD R20,X14,PSAUTO
+ 1077 002711 261 176 200         LDMD R20,=CRTBYT
+ 1078 002714 267 200 020         STMD R20,X14,SAVCRT
+ 1079 002717             
+ 1080 002717             ! v0.10j: automatically wipe/power down the CRT for SII driver 2 only.
+ 1081 002717             ! If the caller already has CRTWRS wipeout set, INCHR- is already valid and
+ 1082 002717             ! no power-state change is made.  ThinkJet driver 1 remains unchanged.
+ 1083 002717             
+ 1084 002717 264 344 015         LDBD R20,X14,PSDRIV
+ 1085 002722 310 002             CMB R20,=2
+ 1086 002724 366 031             JNZ PSIOGO
+ 1087 002726             
+ 1088 002726 264 202 020         LDBD R20,X14,CRTFLG
+ 1089 002731 310 001             CMB R20,=1
+ 1090 002733 367 022             JZR PSIOGO
+ 1091 002735             
+ 1092 002735 316 303 073         JSB =CRTPOF
+ 1093 002740             
+ 1094 002740 230                 BIN
+ 1095 002741 114 261 233         LDMD R14,=BINTAB
+      002744 202 
+ 1096 002745 120 250 001         LDB R20,=1
+ 1097 002750 014 266 202         STBD R20,X14,CRTFLG
+      002753 020 
+ 1098 002754 266 347 015         STBD R20,X14,PSAUTO
+ 1099 002757             
+ 1100 002757             ! Select the decoded translator, suppress automatic EOL, address listener.
+ 1101 002757             
+ 1102 002757 014 306 354 PSIOGO  JSB X14,HPIB7
+      002762 006 
+ 1103 002763 134 250 020         LDB R34,=20
+ 1104 002766 135 222             CLB R35
+ 1105 002770 014 306 076         JSB X14,HPCTRL
+      002773 007 
+ 1106 002774 014 306 130         JSB X14,HPADRO
+      002777 007 
+ 1107 003000             
+ 1108 003000             ! Dispatch printer driver.  Both drivers share the proven HP-IB transport,
+ 1109 003000             ! CRT-state sampling and caller-pointer preservation above.
+ 1110 003000             
+ 1111 003000 230                 BIN
+ 1112 003001 114 261 233         LDMD R14,=BINTAB
+      003004 202 
+ 1113 003005 120 014 264         LDBD R20,X14,PSDRIV
+      003010 344 015 
+ 1114 003012 310 001             CMB R20,=1
+ 1115 003014 367 005             JZR PSJT
+ 1116 003016             
+ 1117 003016             ! Driver 2: SII IFD501 / CAPD345A.
+ 1118 003016             ! v0.10h5 uses a dedicated close path.  SICLOSE waits briefly, then restores CR16 on the
+ 1119 003016             ! translator selected dynamically from PSCODE and deliberately does NOT send
+ 1120 003016             ! the explicit UNLISTEN command used by the ThinkJet close path.
+Page   20                                                             
+CAPASM
+
+ 1121 003016 306 030 013         JSB X14,SIIDRV
+ 1122 003021 360 115             JMP SICLOSE
+ 1123 003023             
+ 1124 003023             ! Driver 1: ThinkJet high-density graphics resolution.
+ 1125 003023             ! ESC*r192S selects 192 dpi horizontally (96 dpi vertically); it is
+ 1126 003023             ! a resolution command, not a raster-height declaration.
+ 1127 003023             
+ 1128 003023 130 251 007 PSJT    LDM R30,=7D,0
+      003026 000 
+ 1129 003027 132 251 042         LDM R32,=TJ192S
+      003032 015 
+ 1130 003033 323 233 202         ADMD R32,=BINTAB
+ 1131 003036 014 306 161         JSB X14,HPOUT
+      003041 007 
+ 1132 003042             
+ 1133 003042 130 251 004         LDM R30,=4D,0
+      003045 000 
+ 1134 003046 132 251 051         LDM R32,=TJSTAR
+      003051 015 
+ 1135 003052 323 233 202         ADMD R32,=BINTAB
+ 1136 003055 014 306 161         JSB X14,HPOUT
+      003060 007 
+ 1137 003061             
+ 1138 003061             ! Execute portrait or 90-degree clockwise landscape raster path.
+ 1139 003061             
+ 1140 003061 230                 BIN
+ 1141 003062 114 261 233         LDMD R14,=BINTAB
+      003065 202 
+ 1142 003066 120 014 264         LDBD R20,X14,PSOVAL
+      003071 346 015 
+ 1143 003073 310 000             CMB R20,=0
+ 1144 003075 366 005             JNZ PSLGO
+ 1145 003077             
+ 1146 003077 306 225 007         JSB X14,TJPOR
+ 1147 003102 360 004             JMP PSDONE
+ 1148 003104             
+ 1149 003104 014 306 214 PSLGO   JSB X14,TJLND
+      003107 010 
+ 1150 003110             
+ 1151 003110             ! End ThinkJet raster graphics.
+ 1152 003110             
+ 1153 003110 230         PSDONE  BIN
+ 1154 003111 114 261 233         LDMD R14,=BINTAB
+      003114 202 
+ 1155 003115 014 306 354         JSB X14,HPIB7
+      003120 006 
+ 1156 003121 130 251 004         LDM R30,=4D,0
+      003124 000 
+ 1157 003125 132 251 122         LDM R32,=TJEND
+      003130 015 
+ 1158 003131 323 233 202         ADMD R32,=BINTAB
+ 1159 003134 014 306 161         JSB X14,HPOUT
+      003137 007 
+ 1160 003140             
+ 1161 003140             ! ------------------------------------------------------------
+ 1162 003140             ! SICLOSE -- v0.10h5 SII-specific interface cleanup.
+ 1163 003140             !
+ 1164 003140             ! Hardware test result:
+ 1165 003140             !
+ 1166 003140             !       CONTROL <select-code>,16;2
+ 1167 003140             !
+ 1168 003140             ! reliably repairs every observed post-PRTSCREEN failure.  Therefore restore
+ 1169 003140             ! CR16 directly and immediately after the final SII HPOUT has completed.
+ 1170 003140             !
+Page   21                                                             
+CAPASM
+
+ 1171 003140             ! IMPORTANT: HPIB7 is generic.  It derives the translator register pair from
+ 1172 003140             ! PSCODE, which was decoded from the first PRTSCREEN argument.  No select
+ 1173 003140             ! code is hardcoded here.
+ 1174 003140             !
+ 1175 003140             ! Do NOT send the old explicit 077-octal UNLISTEN in the SII path.  In failing
+ 1176 003140             ! v0.10h3 runs that value was seen by the printer as ASCII '?' (decimal 63),
+ 1177 003140             ! indicating that the command could escape as peripheral data.
+ 1178 003140             ! ------------------------------------------------------------
+ 1179 003140             
+ 1180 003140 230         SICLOSE BIN
+ 1181 003141 114 261 233         LDMD R14,=BINTAB
+      003144 202 
+ 1182 003145             
+ 1183 003145             ! EBTKS settling delay.  Physical testing proved that BASIC
+ 1184 003145             !     CONTROL <select-code>,16;2
+ 1185 003145             ! always repairs the virtual HP-IB interface.  v0.10h5/v0.10i1 made this
+ 1186 003145             ! substantially more reliable by delaying the assembler-side CR16 restore,
+ 1187 003145             ! but one residual text-corruption case remained.  v0.10i2 therefore uses a
+ 1188 003145             ! longer initial quiet interval and performs the CR16=2 write twice, with a
+ 1189 003145             ! shorter quiet interval between writes and again before returning to BASIC.
+ 1190 003145             !
+ 1191 003145             ! All delays are CPU-only.  Generic HPIB7 is called immediately before each
+ 1192 003145             ! HPCTRL so the translator always comes from PSCODE decoded from PRTSCREEN's
+ 1193 003145             ! first parameter; no select code is hardcoded here.
+ 1194 003145             
+ 1195 003145 014 306 252         JSB X14,SIDELAY
+      003150 006 
+ 1196 003151             
+ 1197 003151             ! First CR16=2 restore.
+ 1198 003151             
+ 1199 003151 230                 BIN
+ 1200 003152 114 261 233         LDMD R14,=BINTAB
+      003155 202 
+ 1201 003156 014 306 354         JSB X14,HPIB7
+      003161 006 
+ 1202 003162 134 250 020         LDB R34,=20
+ 1203 003165 135 250 002         LDB R35,=2
+ 1204 003170 014 306 076         JSB X14,HPCTRL
+      003173 007 
+ 1205 003174             
+ 1206 003174             ! Give EBTKS a short quiet interval, then repeat the same control write.
+ 1207 003174             
+ 1208 003174 014 306 271         JSB X14,SIDLY2
+      003177 006 
+ 1209 003200             
+ 1210 003200 230                 BIN
+ 1211 003201 114 261 233         LDMD R14,=BINTAB
+      003204 202 
+ 1212 003205 014 306 354         JSB X14,HPIB7
+      003210 006 
+ 1213 003211 134 250 020         LDB R34,=20
+ 1214 003214 135 250 002         LDB R35,=2
+ 1215 003217 014 306 076         JSB X14,HPCTRL
+      003222 007 
+ 1216 003223             
+ 1217 003223             ! One final short settling interval before local screen output / BASIC resumes.
+ 1218 003223             
+ 1219 003223 014 306 271         JSB X14,SIDLY2
+      003226 006 
+ 1220 003227             
+ 1221 003227             ! v0.10j: restore the CRT only if this PRTSCREEN call blanked it.
+ 1222 003227             ! PSAUTO=0 means the caller already had CRT wipeout/off active (or this is not
+ 1223 003227             ! the SII path), so preserve that state exactly as found.
+ 1224 003227             
+Page   22                                                             
+CAPASM
+
+ 1225 003227 230                 BIN
+ 1226 003230 114 261 233         LDMD R14,=BINTAB
+      003233 202 
+ 1227 003234 120 014 264         LDBD R20,X14,PSAUTO
+      003237 347 015 
+ 1228 003241 310 000             CMB R20,=0
+ 1229 003243 367 003             JZR SICRET
+ 1230 003245             
+ 1231 003245 316 316 073         JSB =CRTPUP
+ 1232 003250             
+ 1233 003250 360 070     SICRET  JMP PSRET
+ 1234 003252             
+ 1235 003252             
+ 1236 003252             ! ------------------------------------------------------------
+ 1237 003252             ! SIDELAY -- initial deterministic CPU-only settling delay.
+ 1238 003252             !
+ 1239 003252             ! 0200 octal outer loops = 128 decimal, double the v0.10h5/v0.10i1 delay.
+ 1240 003252             ! No CRT, HP-IB or system I/O occurs here.
+ 1241 003252             ! ------------------------------------------------------------
+ 1242 003252             
+ 1243 003252 120 250 200 SIDELAY LDB R20,=200
+ 1244 003255             
+ 1245 003255 121 250 377 SIDLO1  LDB R21,=377
+ 1246 003260 121 212     SIDLO2  DCB R21
+ 1247 003262 366 374             JNZ SIDLO2
+ 1248 003264 120 212             DCB R20
+ 1249 003266 366 365             JNZ SIDLO1
+ 1250 003270 236                 RTN
+ 1251 003271             
+ 1252 003271             
+ 1253 003271             ! ------------------------------------------------------------
+ 1254 003271             ! SIDLY2 -- shorter CPU-only interval between/after CR16 writes.
+ 1255 003271             !
+ 1256 003271             ! 0040 octal outer loops = 32 decimal.
+ 1257 003271             ! ------------------------------------------------------------
+ 1258 003271             
+ 1259 003271 120 250 040 SIDLY2  LDB R20,=40
+ 1260 003274             
+ 1261 003274 121 250 377 SID2L1  LDB R21,=377
+ 1262 003277 121 212     SID2L2  DCB R21
+ 1263 003301 366 374             JNZ SID2L2
+ 1264 003303 120 212             DCB R20
+ 1265 003305 366 365             JNZ SID2L1
+ 1266 003307 236                 RTN
+ 1267 003310             
+ 1268 003310             
+ 1269 003310             ! ------------------------------------------------------------
+ 1270 003310             ! PSCLOSE -- proven ThinkJet close path, unchanged in behavior.
+ 1271 003310             !
+ 1272 003310             ! Driver 1 retains its explicit UNLISTEN followed by CR16=2 restoration.
+ 1273 003310             ! HPIB7 remains generic and uses PSCODE decoded from PRTSCREEN device.
+ 1274 003310             ! ------------------------------------------------------------
+ 1275 003310             
+ 1276 003310 230         PSCLOSE BIN
+ 1277 003311 114 261 233         LDMD R14,=BINTAB
+      003314 202 
+ 1278 003315 014 306 354         JSB X14,HPIB7
+      003320 006 
+ 1279 003321             
+ 1280 003321 135 250 077         LDB R35,=77
+ 1281 003324 014 306 052         JSB X14,HPSNDC
+      003327 007 
+ 1282 003330 134 250 020         LDB R34,=20
+ 1283 003333 135 250 002         LDB R35,=2
+Page   23                                                             
+CAPASM
+
+ 1284 003336 014 306 076         JSB X14,HPCTRL
+      003341 007 
+ 1285 003342             
+ 1286 003342             
+ 1287 003342             ! ------------------------------------------------------------
+ 1288 003342             ! PSRET -- common return path after interface cleanup.
+ 1289 003342             ! ------------------------------------------------------------
+ 1290 003342             
+ 1291 003342 230         PSRET   BIN
+ 1292 003343 114 261 233         LDMD R14,=BINTAB
+      003346 202 
+ 1293 003347             
+ 1294 003347             ! Restore caller's CRT byte pointer and return to whichever wrapper invoked
+ 1295 003347             ! the shared hardcopy executor.
+ 1296 003347             
+ 1297 003347 014 306 240         JSB X14,PREST
+      003352 014 
+ 1298 003353 236                 RTN
+ 1299 003354             
+ 1300 003354             
+ 1301 003354             ! ============================================================
+ 1302 003354             ! HP-IB LOW-LEVEL TRANSPORT -- v0.10e
+ 1303 003354             !
+ 1304 003354             ! The routines below are direct adaptations of the utility
+ 1305 003354             ! subroutines in HP's Assembly Language I/O Reference Manual.
+ 1306 003354             ! Register conventions are kept intentionally close to the manual:
+ 1307 003354             !
+ 1308 003354             !       R24,R25  CCR / PSR address
+ 1309 003354             !       R26,R27  output / input buffer address
+ 1310 003354             !       R30,R31  byte count
+ 1311 003354             !       R32,R33  source pointer
+ 1312 003354             !       R34      control-register number
+ 1313 003354             !       R35      bus/interface byte
+ 1314 003354             !       R36      protocol command or data byte
+ 1315 003354             !       R37      PSR/CCR scratch
+ 1316 003354             !
+ 1317 003354             ! v0.10h1+ selects HP-IB interfaces dynamically from PSCODE (3..10).
+ 1318 003354             ! ============================================================
+ 1319 003354             
+ 1320 003354             
+ 1321 003354             ! ------------------------------------------------------------
+ 1322 003354             ! HPIB7 -- decoded HP-IB translator pointers.
+ 1323 003354             !
+ 1324 003354             ! Legacy entry label retained intentionally: the verified ThinkJet code
+ 1325 003354             ! continues to call HPIB7 unchanged.  PSCODE contains select code 3..10.
+ 1326 003354             !
+ 1327 003354             ! HP-85 translator register map:
+ 1328 003354             !
+ 1329 003354             !       SC3  CCR/PSR = 177520, OB/IB = 177521
+ 1330 003354             !       SC4             177522          177523
+ 1331 003354             !       ...
+ 1332 003354             !       SC7             177530          177531
+ 1333 003354             !       ...
+ 1334 003354             !       SC10            177536          177537
+ 1335 003354             !
+ 1336 003354             ! Offset from SC3 is 2 * (PSCODE-3).
+ 1337 003354             ! ------------------------------------------------------------
+ 1338 003354             
+ 1339 003354 230         HPIB7   BIN
+ 1340 003355 114 261 233         LDMD R14,=BINTAB
+      003360 202 
+ 1341 003361 120 014 264         LDBD R20,X14,PSCODE
+      003364 342 015 
+ 1342 003366 314 003             SBB R20,=3
+Page   24                                                             
+CAPASM
+
+ 1343 003370 204                 LLB R20
+ 1344 003371             
+ 1345 003371 124 251 120         LDM R24,=120,377
+      003374 377 
+ 1346 003375 020 302             ADB R24,R20
+ 1347 003377             
+ 1348 003377 126 251 121         LDM R26,=121,377
+      003402 377 
+ 1349 003403 302                 ADB R26,R20
+ 1350 003404 236                 RTN
+ 1351 003405             
+ 1352 003405             
+ 1353 003405             ! ------------------------------------------------------------
+ 1354 003405             ! HPOBF0 -- wait until output buffer is empty.
+ 1355 003405             ! Manual utility: OBF=0.
+ 1356 003405             ! ------------------------------------------------------------
+ 1357 003405             
+ 1358 003405 137 024 244 HPOBF0  LDBD R37,R24
+ 1359 003410 317 002             ANM R37,=2
+ 1360 003412 366 371             JNZ HPOBF0
+ 1361 003414 236                 RTN
+ 1362 003415             
+ 1363 003415             
+ 1364 003415             ! ------------------------------------------------------------
+ 1365 003415             ! HPDONE -- wait until OBF=0 and BUSY=0.
+ 1366 003415             ! Manual utility: O=B=0.
+ 1367 003415             ! ------------------------------------------------------------
+ 1368 003415             
+ 1369 003415 137 024 244 HPDONE  LDBD R37,R24
+ 1370 003420 317 202             ANM R37,=202
+ 1371 003422 366 371             JNZ HPDONE
+ 1372 003424 236                 RTN
+ 1373 003425             
+ 1374 003425             
+ 1375 003425             ! ------------------------------------------------------------
+ 1376 003425             ! HPDIR -- send protocol command in R36 by direct method.
+ 1377 003425             ! Manual utility: DIRCMD.
+ 1378 003425             ! ------------------------------------------------------------
+ 1379 003425             
+ 1380 003425 014 306 015 HPDIR   JSB X14,HPDONE
+      003430 007 
+ 1381 003431             
+ 1382 003431 137 250 002         LDB R37,=2
+ 1383 003434 024 246             STBD R37,R24
+ 1384 003436 136 026 246         STBD R36,R26
+ 1385 003441             
+ 1386 003441 014 306 005         JSB X14,HPOBF0
+      003444 007 
+ 1387 003445             
+ 1388 003445 137 222             CLB R37
+ 1389 003447 024 246             STBD R37,R24
+ 1390 003451             
+ 1391 003451 236                 RTN
+ 1392 003452             
+ 1393 003452             
+ 1394 003452             ! ------------------------------------------------------------
+ 1395 003452             ! HPSNDC -- send byte in R35 as HP-IB bus command.
+ 1396 003452             ! Manual utility: SNDCMD.
+ 1397 003452             ! ------------------------------------------------------------
+ 1398 003452             
+ 1399 003452 136 250 260 HPSNDC  LDB R36,=260
+ 1400 003455 014 306 025         JSB X14,HPDIR
+      003460 007 
+ 1401 003461             
+Page   25                                                             
+CAPASM
+
+ 1402 003461 137 250 004         LDB R37,=4
+ 1403 003464 024 246             STBD R37,R24
+ 1404 003466 135 026 246         STBD R35,R26
+ 1405 003471             
+ 1406 003471 014 306 015         JSB X14,HPDONE
+      003474 007 
+ 1407 003475 236                 RTN
+ 1408 003476             
+ 1409 003476             
+ 1410 003476             ! ------------------------------------------------------------
+ 1411 003476             ! HPCTRL -- write one interface control register.
+ 1412 003476             !
+ 1413 003476             !       R34 = register number
+ 1414 003476             !       R35 = one-byte value
+ 1415 003476             !
+ 1416 003476             ! This is the one-byte specialization of the manual CONTREL
+ 1417 003476             ! routine.  Opcode 200 octal is Write Control.
+ 1418 003476             ! ------------------------------------------------------------
+ 1419 003476             
+ 1420 003476 136 250 200 HPCTRL  LDB R36,=200
+ 1421 003501 034 224             ORB R36,R34
+ 1422 003503 014 306 025         JSB X14,HPDIR
+      003506 007 
+ 1423 003507             
+ 1424 003507 014 306 005         JSB X14,HPOBF0
+      003512 007 
+ 1425 003513             
+ 1426 003513 137 250 004         LDB R37,=4
+ 1427 003516 024 246             STBD R37,R24
+ 1428 003520 135 026 246         STBD R35,R26
+ 1429 003523             
+ 1430 003523 014 306 015         JSB X14,HPDONE
+      003526 007 
+ 1431 003527 236                 RTN
+ 1432 003530             
+ 1433 003530             
+ 1434 003530             ! ------------------------------------------------------------
+ 1435 003530             ! HPADRO -- configure HP-IB for output to PSADDR.
+ 1436 003530             !
+ 1437 003530             ! Manual sequence:
+ 1438 003530             !
+ 1439 003530             !       077     Unlisten
+ 1440 003530             !       105     Send My Talk Address protocol command
+ 1441 003530             !       040+n   listener address n
+ 1442 003530             ! ------------------------------------------------------------
+ 1443 003530             
+ 1444 003530 135 250 077 HPADRO  LDB R35,=77
+ 1445 003533 014 306 052         JSB X14,HPSNDC
+      003536 007 
+ 1446 003537             
+ 1447 003537 136 250 105         LDB R36,=105
+ 1448 003542 014 306 025         JSB X14,HPDIR
+      003545 007 
+ 1449 003546             
+ 1450 003546 135 014 264         LDBD R35,X14,PSADDR
+      003551 343 015 
+ 1451 003553 312 040             ADB R35,=40
+ 1452 003555 306 052 007         JSB X14,HPSNDC
+ 1453 003560             
+ 1454 003560 236                 RTN
+ 1455 003561             
+ 1456 003561             
+ 1457 003561             ! ------------------------------------------------------------
+ 1458 003561             ! HPOUT -- simple output.
+Page   26                                                             
+CAPASM
+
+ 1459 003561             !
+ 1460 003561             !       R30,R31 = byte count (must be non-zero)
+ 1461 003561             !       R32,R33 = source pointer
+ 1462 003561             !
+ 1463 003561             ! Protocol 240 octal is the manual's simple-output operation.
+ 1464 003561             ! CED is asserted only for the final byte.  Because CR16 is zero
+ 1465 003561             ! while this routine executes, the IOP appends no EOL sequence.
+ 1466 003561             ! ------------------------------------------------------------
+ 1467 003561             
+ 1468 003561 136 250 240 HPOUT   LDB R36,=240
+ 1469 003564 014 306 025         JSB X14,HPDIR
+      003567 007 
+ 1470 003570             
+ 1471 003570 136 032 340 HPOUT1  POBD R36,+R32
+ 1472 003573 014 306 005         JSB X14,HPOBF0
+      003576 007 
+ 1473 003577             
+ 1474 003577 130 213             DCM R30
+ 1475 003601 367 005             JZR HPOUTE
+ 1476 003603             
+ 1477 003603 136 026 246         STBD R36,R26
+ 1478 003606 360 360             JMP HPOUT1
+ 1479 003610             
+ 1480 003610 137 250 004 HPOUTE  LDB R37,=4
+ 1481 003613 024 246             STBD R37,R24
+ 1482 003615 136 026 246         STBD R36,R26
+ 1483 003620             
+ 1484 003620 014 306 015         JSB X14,HPDONE
+      003623 007 
+ 1485 003624 236                 RTN
+ 1486 003625             
+ 1487 003625             
+ 1488 003625             ! ============================================================
+ 1489 003625             ! THINKJET DRIVER 1 -- v0.10g
+ 1490 003625             ! ============================================================
+ 1491 003625             
+ 1492 003625             ! ------------------------------------------------------------
+ 1493 003625             ! TJPOR -- portrait/direct raster.
+ 1494 003625             !
+ 1495 003625             ! z1: 256 x 192,  32 bytes/row, 1 vertical copy
+ 1496 003625             ! z2: 512 x 384,  64 bytes/row, 2 vertical copies
+ 1497 003625             ! z4: 1024 x 768, 128 bytes/row, 4 vertical copies
+ 1498 003625             ! ------------------------------------------------------------
+ 1499 003625             
+ 1500 003625 230         TJPOR   BIN
+ 1501 003626 114 261 233         LDMD R14,=BINTAB
+      003631 202 
+ 1502 003632 146 251 000         LDM R46,=0,20
+      003635 020 
+ 1503 003636 014 267 350         STMD R46,X14,PSRADR
+      003641 015 
+ 1504 003642 120 222             CLB R20
+ 1505 003644 266 352 015         STBD R20,X14,PSROW
+ 1506 003647             
+ 1507 003647 230         TPLOOP  BIN
+ 1508 003650 114 261 233         LDMD R14,=BINTAB
+      003653 202 
+ 1509 003654 146 014 265         LDMD R46,X14,PSRADR
+      003657 350 015 
+ 1510 003661 306 262 014         JSB X14,READROW
+ 1511 003664 014 306 327         JSB X14,TPROW
+      003667 007 
+ 1512 003670             
+ 1513 003670 230                 BIN
+Page   27                                                             
+CAPASM
+
+ 1514 003671 114 261 233         LDMD R14,=BINTAB
+      003674 202 
+ 1515 003675 120 014 264         LDBD R20,X14,PSROW
+      003700 352 015 
+ 1516 003702 310 277             CMB R20,=277
+ 1517 003704 367 020             JZR TPDONE
+ 1518 003706             
+ 1519 003706 210                 ICB R20
+ 1520 003707 266 352 015         STBD R20,X14,PSROW
+ 1521 003712 146 265 350         LDMD R46,X14,PSRADR
+      003715 015 
+ 1522 003716 313 100 000         ADM R46,=100,0
+ 1523 003721 267 350 015         STMD R46,X14,PSRADR
+ 1524 003724 360 321             JMP TPLOOP
+ 1525 003726             
+ 1526 003726 236         TPDONE  RTN
+ 1527 003727             
+ 1528 003727             ! TPROW -- transmit the current ROWBUF at the selected zoom.
+ 1529 003727             
+ 1530 003727 230         TPROW   BIN
+ 1531 003730 114 261 233         LDMD R14,=BINTAB
+      003733 202 
+ 1532 003734 120 014 264         LDBD R20,X14,PSZVAL
+      003737 345 015 
+ 1533 003741 310 001             CMB R20,=1
+ 1534 003743 367 006             JZR TPZ1
+ 1535 003745 310 002             CMB R20,=2
+ 1536 003747 367 045             JZR TPZ2
+ 1537 003751 360 077             JMP TPZ4
+ 1538 003753             
+ 1539 003753             ! z1: unchanged v0.10f row transfer.
+ 1540 003753             
+ 1541 003753 014 306 354 TPZ1    JSB X14,HPIB7
+      003756 006 
+ 1542 003757 130 251 006         LDM R30,=6D,0
+      003762 000 
+ 1543 003763 132 251 055         LDM R32,=TJ32W
+      003766 015 
+ 1544 003767 323 233 202         ADMD R32,=BINTAB
+ 1545 003772 014 306 161         JSB X14,HPOUT
+      003775 007 
+ 1546 003776             
+ 1547 003776 130 251 040         LDM R30,=32D,0
+      004001 000 
+ 1548 004002 132 251 203         LDM R32,=ROWBUF
+      004005 020 
+ 1549 004006 323 233 202         ADMD R32,=BINTAB
+ 1550 004011 014 306 161         JSB X14,HPOUT
+      004014 007 
+ 1551 004015 236                 RTN
+ 1552 004016             
+ 1553 004016             ! z2: expand 32 bytes -> 64 bytes, then send row twice.
+ 1554 004016             
+ 1555 004016 130 251 040 TPZ2    LDM R30,=32D,0
+      004021 000 
+ 1556 004022 132 251 203         LDM R32,=ROWBUF
+      004025 020 
+ 1557 004026 323 233 202         ADMD R32,=BINTAB
+ 1558 004031 014 306 170         JSB X14,TJEXP2
+      004034 012 
+ 1559 004035             
+ 1560 004035 014 306 354         JSB X14,HPIB7
+      004040 006 
+ 1561 004041 014 306 116         JSB X14,TP64R
+Page   28                                                             
+CAPASM
+
+      004044 010 
+ 1562 004045 014 306 116         JSB X14,TP64R
+      004050 010 
+ 1563 004051 236                 RTN
+ 1564 004052             
+ 1565 004052             ! z4: expand 32 bytes -> 128 bytes, then send row four times.
+ 1566 004052             
+ 1567 004052 130 251 040 TPZ4    LDM R30,=32D,0
+      004055 000 
+ 1568 004056 132 251 203         LDM R32,=ROWBUF
+      004061 020 
+ 1569 004062 323 233 202         ADMD R32,=BINTAB
+ 1570 004065 014 306 303         JSB X14,TJEXP4
+      004070 012 
+ 1571 004071             
+ 1572 004071 014 306 354         JSB X14,HPIB7
+      004074 006 
+ 1573 004075 014 306 155         JSB X14,TP128R
+      004100 010 
+ 1574 004101 014 306 155         JSB X14,TP128R
+      004104 010 
+ 1575 004105 014 306 155         JSB X14,TP128R
+      004110 010 
+ 1576 004111 014 306 155         JSB X14,TP128R
+      004114 010 
+ 1577 004115 236                 RTN
+ 1578 004116             
+ 1579 004116             ! Send one expanded portrait row (64 bytes).
+ 1580 004116             
+ 1581 004116 130 251 006 TP64R   LDM R30,=6D,0
+      004121 000 
+ 1582 004122 132 251 063         LDM R32,=TJ64W
+      004125 015 
+ 1583 004126 323 233 202         ADMD R32,=BINTAB
+ 1584 004131 014 306 161         JSB X14,HPOUT
+      004134 007 
+ 1585 004135             
+ 1586 004135 130 251 100         LDM R30,=64D,0
+      004140 000 
+ 1587 004141 132 251 265         LDM R32,=TJSBUF
+      004144 016 
+ 1588 004145 323 233 202         ADMD R32,=BINTAB
+ 1589 004150 014 306 161         JSB X14,HPOUT
+      004153 007 
+ 1590 004154 236                 RTN
+ 1591 004155             
+ 1592 004155             ! Send one 4x portrait row (128 bytes).  Header is 7 bytes because
+ 1593 004155             ! the decimal byte count has three digits.
+ 1594 004155             
+ 1595 004155 130 251 007 TP128R  LDM R30,=7D,0
+      004160 000 
+ 1596 004161 132 251 071         LDM R32,=TJ128W
+      004164 015 
+ 1597 004165 323 233 202         ADMD R32,=BINTAB
+ 1598 004170 014 306 161         JSB X14,HPOUT
+      004173 007 
+ 1599 004174             
+ 1600 004174 130 251 200         LDM R30,=128D,0
+      004177 000 
+ 1601 004200 132 251 365         LDM R32,=TJ4BUF
+      004203 016 
+ 1602 004204 323 233 202         ADMD R32,=BINTAB
+ 1603 004207 014 306 161         JSB X14,HPOUT
+      004212 007 
+Page   29                                                             
+CAPASM
+
+ 1604 004213 236                 RTN
+ 1605 004214             
+ 1606 004214             
+ 1607 004214             ! ------------------------------------------------------------
+ 1608 004214             ! TJLND -- 90-degree clockwise landscape.
+ 1609 004214             !
+ 1610 004214             ! Mapping in image coordinates:
+ 1611 004214             !       x' = 191-y
+ 1612 004214             !       y' = x
+ 1613 004214             !
+ 1614 004214             ! Eight adjacent source X columns are accumulated into eight 24-byte
+ 1615 004214             ! destination rows.  Source Y is traversed 191..0 so destination x'
+ 1616 004214             ! advances naturally from 0..191.  Only 192 bytes of rotation buffer
+ 1617 004214             ! are required.
+ 1618 004214             ! ------------------------------------------------------------
+ 1619 004214             
+ 1620 004214 230         TJLND   BIN
+ 1621 004215 114 261 233         LDMD R14,=BINTAB
+      004220 202 
+ 1622 004221 120 222             CLB R20
+ 1623 004223 014 266 353         STBD R20,X14,PSLBND
+      004226 015 
+ 1624 004227             
+ 1625 004227 014 306 264 TLBLOP  JSB X14,TJLBD
+      004232 010 
+ 1626 004233 014 306 221         JSB X14,TJLSND
+      004236 011 
+ 1627 004237             
+ 1628 004237 230                 BIN
+ 1629 004240 114 261 233         LDMD R14,=BINTAB
+      004243 202 
+ 1630 004244 120 014 264         LDBD R20,X14,PSLBND
+      004247 353 015 
+ 1631 004251 310 037             CMB R20,=37
+ 1632 004253 367 006             JZR TLDONE
+ 1633 004255 210                 ICB R20
+ 1634 004256 266 353 015         STBD R20,X14,PSLBND
+ 1635 004261 360 344             JMP TLBLOP
+ 1636 004263             
+ 1637 004263 236         TLDONE  RTN
+ 1638 004264             
+ 1639 004264             
+ 1640 004264             ! ------------------------------------------------------------
+ 1641 004264             ! TJLBD -- build one group of eight rotated output rows.
+ 1642 004264             ! ------------------------------------------------------------
+ 1643 004264             
+ 1644 004264 014 306 173 TJLBD   JSB X14,TJCLR
+      004267 011 
+ 1645 004270             
+ 1646 004270 230                 BIN
+ 1647 004271 114 261 233         LDMD R14,=BINTAB
+      004274 202 
+ 1648 004275             
+ 1649 004275             ! First destination byte in row 0 and MSB of that byte.
+ 1650 004275             
+ 1651 004275 134 251 365         LDM R34,=TLBUF
+      004300 015 
+ 1652 004301 323 233 202         ADMD R34,=BINTAB
+ 1653 004304 014 267 360         STMD R34,X14,PSLDP
+      004307 015 
+ 1654 004310 120 250 200         LDB R20,=200
+ 1655 004313 266 355 015         STBD R20,X14,PSLMSK
+ 1656 004316             
+ 1657 004316             ! Bottom physical source row = 037700 octal.  Add 2*byte-column.
+Page   30                                                             
+CAPASM
+
+ 1658 004316             
+ 1659 004316 146 251 300         LDM R46,=300,77
+      004321 077 
+ 1660 004322 120 264 353         LDBD R20,X14,PSLBND
+      004325 015 
+ 1661 004326 204                 LLB R20
+ 1662 004327 146 020 302         ADB R46,R20
+ 1663 004332 014 267 356         STMD R46,X14,PSLSRC
+      004335 015 
+ 1664 004336             
+ 1665 004336             ! 192 source rows.
+ 1666 004336             
+ 1667 004336 120 250 300         LDB R20,=300
+ 1668 004341 266 354 015         STBD R20,X14,PSLCNT
+ 1669 004344             
+ 1670 004344 014 306 045 TLRLOP  JSB X14,TJLRD
+      004347 011 
+ 1671 004350 014 306 114         JSB X14,TJLSCT
+      004353 011 
+ 1672 004354             
+ 1673 004354 230                 BIN
+ 1674 004355 114 261 233         LDMD R14,=BINTAB
+      004360 202 
+ 1675 004361             
+ 1676 004361             ! Advance destination bit; after each 8 source rows move one byte right.
+ 1677 004361             
+ 1678 004361 122 014 264         LDBD R22,X14,PSLMSK
+      004364 355 015 
+ 1679 004366 206                 LRB R22
+ 1680 004367 366 017             JNZ TLSMSV
+ 1681 004371             
+ 1682 004371 250 200             LDB R22,=200
+ 1683 004373 266 355 015         STBD R22,X14,PSLMSK
+ 1684 004376 134 265 360         LDMD R34,X14,PSLDP
+      004401 015 
+ 1685 004402 211                 ICM R34
+ 1686 004403 267 360 015         STMD R34,X14,PSLDP
+ 1687 004406 360 005             JMP TLSMAD
+ 1688 004410             
+ 1689 004410 122 014 266 TLSMSV  STBD R22,X14,PSLMSK
+      004413 355 015 
+ 1690 004415             
+ 1691 004415 120 014 264 TLSMAD  LDBD R20,X14,PSLCNT
+      004420 354 015 
+ 1692 004422 212                 DCB R20
+ 1693 004423 266 354 015         STBD R20,X14,PSLCNT
+ 1694 004426 367 014             JZR TLBFIN
+ 1695 004430             
+ 1696 004430             ! Move one physical CRT row upward.
+ 1697 004430             
+ 1698 004430 146 265 356         LDMD R46,X14,PSLSRC
+      004433 015 
+ 1699 004434 315 100 000         SBM R46,=100,0
+ 1700 004437 267 356 015         STMD R46,X14,PSLSRC
+ 1701 004442 360 300             JMP TLRLOP
+ 1702 004444             
+ 1703 004444 236         TLBFIN  RTN
+ 1704 004445             
+ 1705 004445             
+ 1706 004445             ! ------------------------------------------------------------
+ 1707 004445             ! TJLRD -- read one source CRT byte for landscape conversion.
+ 1708 004445             ! Returns source byte in R36.
+ 1709 004445             ! ------------------------------------------------------------
+ 1710 004445             
+Page   31                                                             
+CAPASM
+
+ 1711 004445 230         TJLRD   BIN
+ 1712 004446 114 261 233         LDMD R14,=BINTAB
+      004451 202 
+ 1713 004452 134 014 265         LDMD R34,X14,PSLSRC
+      004455 356 015 
+ 1714 004457 316 022 073         JSB =BYTCR!
+ 1715 004462             
+ 1716 004462 230                 BIN
+ 1717 004463 114 261 233         LDMD R14,=BINTAB
+      004466 202 
+ 1718 004467 120 014 264         LDBD R20,X14,CRTFLG
+      004472 202 020 
+ 1719 004474 310 000             CMB R20,=0
+ 1720 004476 367 005             JZR TLNORM
+ 1721 004500             
+ 1722 004500 316 220 072         JSB =INCHR-
+ 1723 004503 360 003             JMP TLRDON
+ 1724 004505             
+ 1725 004505 316 244 072 TLNORM  JSB =INCHR
+ 1726 004510             
+ 1727 004510 136 032 240 TLRDON  LDB R36,R32
+ 1728 004513 236                 RTN
+ 1729 004514             
+ 1730 004514             
+ 1731 004514             ! ------------------------------------------------------------
+ 1732 004514             ! TJLSCT -- scatter the eight pixels in R36 into the eight rotated
+ 1733 004514             ! output rows at their current common destination bit position.
+ 1734 004514             ! ------------------------------------------------------------
+ 1735 004514             
+ 1736 004514 230         TJLSCT  BIN
+ 1737 004515 114 261 233         LDMD R14,=BINTAB
+      004520 202 
+ 1738 004521 134 014 265         LDMD R34,X14,PSLDP
+      004524 360 015 
+ 1739 004526 122 264 355         LDBD R22,X14,PSLMSK
+      004531 015 
+ 1740 004532 123 250 200         LDB R23,=200
+ 1741 004535 124 250 010         LDB R24,=10
+ 1742 004540             
+ 1743 004540 120 036 240 TLSBIT  LDB R20,R36
+ 1744 004543 023 224             ORB R20,R23
+ 1745 004545 036 300             CMB R20,R36
+ 1746 004547 366 007             JNZ TLSKIP
+ 1747 004551             
+ 1748 004551 121 034 244         LDBD R21,R34
+ 1749 004554 022 224             ORB R21,R22
+ 1750 004556 034 246             STBD R21,R34
+ 1751 004560             
+ 1752 004560 134 313 030 TLSKIP  ADM R34,=30,0
+      004563 000 
+ 1753 004564 123 206             LRB R23
+ 1754 004566 124 212             DCB R24
+ 1755 004570 366 346             JNZ TLSBIT
+ 1756 004572 236                 RTN
+ 1757 004573             
+ 1758 004573             
+ 1759 004573             ! ------------------------------------------------------------
+ 1760 004573             ! TJCLR -- clear the 8 x 24-byte landscape band buffer.
+ 1761 004573             ! ------------------------------------------------------------
+ 1762 004573             
+ 1763 004573 230         TJCLR   BIN
+ 1764 004574 134 251 365         LDM R34,=TLBUF
+      004577 015 
+ 1765 004600 323 233 202         ADMD R34,=BINTAB
+Page   32                                                             
+CAPASM
+
+ 1766 004603 130 251 300         LDM R30,=192D,0
+      004606 000 
+ 1767 004607 120 222             CLB R20
+ 1768 004611             
+ 1769 004611 120 034 344 TCLLOP  PUBD R20,+R34
+ 1770 004614 130 213             DCM R30
+ 1771 004616 366 371             JNZ TCLLOP
+ 1772 004620 236                 RTN
+ 1773 004621             
+ 1774 004621             
+ 1775 004621             ! ------------------------------------------------------------
+ 1776 004621             ! TJLSND -- transmit the eight rotated rows currently in TLBUF.
+ 1777 004621             ! z1: 24 bytes per row, one vertical copy.
+ 1778 004621             ! z2: expand to 48 bytes and transmit every row twice.
+ 1779 004621             ! z4: expand to 96 bytes and transmit every row four times.
+ 1780 004621             ! ------------------------------------------------------------
+ 1781 004621             
+ 1782 004621 230         TJLSND  BIN
+ 1783 004622 114 261 233         LDMD R14,=BINTAB
+      004625 202 
+ 1784 004626 134 251 365         LDM R34,=TLBUF
+      004631 015 
+ 1785 004632 323 233 202         ADMD R34,=BINTAB
+ 1786 004635 014 267 362         STMD R34,X14,PSLOUT
+      004640 015 
+ 1787 004641 120 222             CLB R20
+ 1788 004643 266 364 015         STBD R20,X14,PSLRNO
+ 1789 004646             
+ 1790 004646 014 306 307 TLSLOP  JSB X14,TJLSR
+      004651 011 
+ 1791 004652             
+ 1792 004652 230                 BIN
+ 1793 004653 114 261 233         LDMD R14,=BINTAB
+      004656 202 
+ 1794 004657 134 014 265         LDMD R34,X14,PSLOUT
+      004662 362 015 
+ 1795 004664 313 030 000         ADM R34,=30,0
+ 1796 004667 267 362 015         STMD R34,X14,PSLOUT
+ 1797 004672             
+ 1798 004672 120 264 364         LDBD R20,X14,PSLRNO
+      004675 015 
+ 1799 004676 210                 ICB R20
+ 1800 004677 266 364 015         STBD R20,X14,PSLRNO
+ 1801 004702 310 010             CMB R20,=10
+ 1802 004704 366 340             JNZ TLSLOP
+ 1803 004706 236                 RTN
+ 1804 004707             
+ 1805 004707             ! TJLSR -- transmit one current rotated row at selected zoom.
+ 1806 004707             
+ 1807 004707 230         TJLSR   BIN
+ 1808 004710 114 261 233         LDMD R14,=BINTAB
+      004713 202 
+ 1809 004714 120 014 264         LDBD R20,X14,PSZVAL
+      004717 345 015 
+ 1810 004721 310 001             CMB R20,=1
+ 1811 004723 367 006             JZR TLSZ1
+ 1812 004725 310 002             CMB R20,=2
+ 1813 004727 367 047             JZR TLSZ2
+ 1814 004731 360 076             JMP TLSZ4
+ 1815 004733             
+ 1816 004733 014 306 354 TLSZ1   JSB X14,HPIB7
+      004736 006 
+ 1817 004737 130 251 006         LDM R30,=6D,0
+      004742 000 
+Page   33                                                             
+CAPASM
+
+ 1818 004743 132 251 100         LDM R32,=TJ24W
+      004746 015 
+ 1819 004747 323 233 202         ADMD R32,=BINTAB
+ 1820 004752 014 306 161         JSB X14,HPOUT
+      004755 007 
+ 1821 004756             
+ 1822 004756 230                 BIN
+ 1823 004757 114 261 233         LDMD R14,=BINTAB
+      004762 202 
+ 1824 004763 130 251 030         LDM R30,=24D,0
+      004766 000 
+ 1825 004767 132 014 265         LDMD R32,X14,PSLOUT
+      004772 362 015 
+ 1826 004774 306 161 007         JSB X14,HPOUT
+ 1827 004777 236                 RTN
+ 1828 005000             
+ 1829 005000 130 251 030 TLSZ2   LDM R30,=24D,0
+      005003 000 
+ 1830 005004 132 014 265         LDMD R32,X14,PSLOUT
+      005007 362 015 
+ 1831 005011 306 170 012         JSB X14,TJEXP2
+ 1832 005014             
+ 1833 005014 014 306 354         JSB X14,HPIB7
+      005017 006 
+ 1834 005020 014 306 072         JSB X14,TL48R
+      005023 012 
+ 1835 005024 014 306 072         JSB X14,TL48R
+      005027 012 
+ 1836 005030 236                 RTN
+ 1837 005031             
+ 1838 005031 130 251 030 TLSZ4   LDM R30,=24D,0
+      005034 000 
+ 1839 005035 132 014 265         LDMD R32,X14,PSLOUT
+      005040 362 015 
+ 1840 005042 306 303 012         JSB X14,TJEXP4
+ 1841 005045             
+ 1842 005045 014 306 354         JSB X14,HPIB7
+      005050 006 
+ 1843 005051 014 306 131         JSB X14,TL96R
+      005054 012 
+ 1844 005055 014 306 131         JSB X14,TL96R
+      005060 012 
+ 1845 005061 014 306 131         JSB X14,TL96R
+      005064 012 
+ 1846 005065 014 306 131         JSB X14,TL96R
+      005070 012 
+ 1847 005071 236                 RTN
+ 1848 005072             
+ 1849 005072             ! Send one expanded landscape row (48 bytes).
+ 1850 005072             
+ 1851 005072 130 251 006 TL48R   LDM R30,=6D,0
+      005075 000 
+ 1852 005076 132 251 106         LDM R32,=TJ48W
+      005101 015 
+ 1853 005102 323 233 202         ADMD R32,=BINTAB
+ 1854 005105 014 306 161         JSB X14,HPOUT
+      005110 007 
+ 1855 005111             
+ 1856 005111 130 251 060         LDM R30,=48D,0
+      005114 000 
+ 1857 005115 132 251 265         LDM R32,=TJSBUF
+      005120 016 
+ 1858 005121 323 233 202         ADMD R32,=BINTAB
+ 1859 005124 014 306 161         JSB X14,HPOUT
+Page   34                                                             
+CAPASM
+
+      005127 007 
+ 1860 005130 236                 RTN
+ 1861 005131             
+ 1862 005131 130 251 006 TL96R   LDM R30,=6D,0
+      005134 000 
+ 1863 005135 132 251 114         LDM R32,=TJ96W
+      005140 015 
+ 1864 005141 323 233 202         ADMD R32,=BINTAB
+ 1865 005144 014 306 161         JSB X14,HPOUT
+      005147 007 
+ 1866 005150             
+ 1867 005150 130 251 140         LDM R30,=96D,0
+      005153 000 
+ 1868 005154 132 251 365         LDM R32,=TJ4BUF
+      005157 016 
+ 1869 005160 323 233 202         ADMD R32,=BINTAB
+ 1870 005163 014 306 161         JSB X14,HPOUT
+      005166 007 
+ 1871 005167 236                 RTN
+ 1872 005170             
+ 1873 005170             
+ 1874 005170             ! ------------------------------------------------------------
+ 1875 005170             ! TJEXP2 -- horizontal 2x expansion.
+ 1876 005170             !
+ 1877 005170             ! Input:
+ 1878 005170             !       R30/R31 = source byte count (24 or 32)
+ 1879 005170             !       R32/R33 = absolute source pointer
+ 1880 005170             ! Output:
+ 1881 005170             !       TJSBUF contains 2*count bytes.
+ 1882 005170             !
+ 1883 005170             ! Each nibble is expanded through DUP4, where every source bit becomes
+ 1884 005170             ! two adjacent output bits.  High nibble is emitted before low nibble.
+ 1885 005170             ! ------------------------------------------------------------
+ 1886 005170             
+ 1887 005170 230         TJEXP2  BIN
+ 1888 005171 134 251 265         LDM R34,=TJSBUF
+      005174 016 
+ 1889 005175 323 233 202         ADMD R34,=BINTAB
+ 1890 005200             
+ 1891 005200 136 032 340 TXLOOP  POBD R36,+R32
+ 1892 005203 014 306 214         JSB X14,T2BYTE
+      005206 012 
+ 1893 005207 130 213             DCM R30
+ 1894 005211 366 365             JNZ TXLOOP
+ 1895 005213 236                 RTN
+ 1896 005214             
+ 1897 005214 120 036 240 T2BYTE  LDB R20,R36
+ 1898 005217 206                 LRB R20
+ 1899 005220 206                 LRB R20
+ 1900 005221 206                 LRB R20
+ 1901 005222 206                 LRB R20
+ 1902 005223 146 223             CLM R46
+ 1903 005225 020 240             LDB R46,R20
+ 1904 005227 176 251 126         LDM R76,=DUP4
+      005232 015 
+ 1905 005233 323 233 202         ADMD R76,=BINTAB
+ 1906 005236 046 303             ADM R76,R46
+ 1907 005240 122 076 244         LDBD R22,R76
+ 1908 005243 034 344             PUBD R22,+R34
+ 1909 005245             
+ 1910 005245 120 036 240         LDB R20,R36
+ 1911 005250 204                 LLB R20
+ 1912 005251 204                 LLB R20
+ 1913 005252 204                 LLB R20
+Page   35                                                             
+CAPASM
+
+ 1914 005253 204                 LLB R20
+ 1915 005254 206                 LRB R20
+ 1916 005255 206                 LRB R20
+ 1917 005256 206                 LRB R20
+ 1918 005257 206                 LRB R20
+ 1919 005260 146 223             CLM R46
+ 1920 005262 020 240             LDB R46,R20
+ 1921 005264 176 251 126         LDM R76,=DUP4
+      005267 015 
+ 1922 005270 323 233 202         ADMD R76,=BINTAB
+ 1923 005273 046 303             ADM R76,R46
+ 1924 005275 122 076 244         LDBD R22,R76
+ 1925 005300 034 344             PUBD R22,+R34
+ 1926 005302 236                 RTN
+ 1927 005303             
+ 1928 005303             
+ 1929 005303             ! ------------------------------------------------------------
+ 1930 005303             ! TJEXP4 -- horizontal 4x expansion.
+ 1931 005303             !
+ 1932 005303             ! Input is identical to TJEXP2.  QUAD4 maps each 4-bit nibble to
+ 1933 005303             ! two output bytes in which every source bit is repeated four times.
+ 1934 005303             ! Output is written to TJ4BUF (max 128 bytes).
+ 1935 005303             ! ------------------------------------------------------------
+ 1936 005303             
+ 1937 005303 230         TJEXP4  BIN
+ 1938 005304 134 251 365         LDM R34,=TJ4BUF
+      005307 016 
+ 1939 005310 323 233 202         ADMD R34,=BINTAB
+ 1940 005313             
+ 1941 005313 136 032 340 T4LOOP  POBD R36,+R32
+ 1942 005316 014 306 327         JSB X14,T4BYTE
+      005321 012 
+ 1943 005322 130 213             DCM R30
+ 1944 005324 366 365             JNZ T4LOOP
+ 1945 005326 236                 RTN
+ 1946 005327             
+ 1947 005327 120 036 240 T4BYTE  LDB R20,R36
+ 1948 005332 206                 LRB R20
+ 1949 005333 206                 LRB R20
+ 1950 005334 206                 LRB R20
+ 1951 005335 206                 LRB R20
+ 1952 005336 146 223             CLM R46
+ 1953 005340 020 240             LDB R46,R20
+ 1954 005342 204                 LLB R46
+ 1955 005343 176 251 146         LDM R76,=QUAD4
+      005346 015 
+ 1956 005347 323 233 202         ADMD R76,=BINTAB
+ 1957 005352 046 303             ADM R76,R46
+ 1958 005354 122 076 340         POBD R22,+R76
+ 1959 005357 034 344             PUBD R22,+R34
+ 1960 005361 076 340             POBD R22,+R76
+ 1961 005363 034 344             PUBD R22,+R34
+ 1962 005365             
+ 1963 005365 120 036 240         LDB R20,R36
+ 1964 005370 204                 LLB R20
+ 1965 005371 204                 LLB R20
+ 1966 005372 204                 LLB R20
+ 1967 005373 204                 LLB R20
+ 1968 005374 206                 LRB R20
+ 1969 005375 206                 LRB R20
+ 1970 005376 206                 LRB R20
+ 1971 005377 206                 LRB R20
+ 1972 005400 146 223             CLM R46
+ 1973 005402 020 240             LDB R46,R20
+Page   36                                                             
+CAPASM
+
+ 1974 005404 204                 LLB R46
+ 1975 005405 176 251 146         LDM R76,=QUAD4
+      005410 015 
+ 1976 005411 323 233 202         ADMD R76,=BINTAB
+ 1977 005414 046 303             ADM R76,R46
+ 1978 005416 122 076 340         POBD R22,+R76
+ 1979 005421 034 344             PUBD R22,+R34
+ 1980 005423 076 340             POBD R22,+R76
+ 1981 005425 034 344             PUBD R22,+R34
+ 1982 005427 236                 RTN
+ 1983 005430             
+ 1984 005430             
+ 1985 005430             ! ============================================================
+ 1986 005430             ! SII / EPSON DRIVER 2 -- v0.10i eight-row batched raster output
+ 1987 005430             !
+ 1988 005430             ! Target hardware:
+ 1989 005430             !       Seiko Instruments IFD501-01UK-E
+ 1990 005430             !       CAPD345A 576-dot thermal mechanism
+ 1991 005430             !
+ 1992 005430             ! Protocol per output block:
+ 1993 005430             !       GS v 0 m xL xH 8 0 [eight raster rows]
+ 1994 005430             !
+ 1995 005430             ! m=0 : native 203 x 203 dpi
+ 1996 005430             ! m=3 : printer-native double width + double height
+ 1997 005430             !
+ 1998 005430             ! v0.10i keeps the stable v0.10h5 HP-IB/CR16 behaviour but reduces SII
+ 1999 005430             ! transaction overhead by batching eight adjacent raster rows into each
+ 2000 005430             ! self-contained GS v 0 command.
+ 2001 005430             !
+ 2002 005430             ! Portrait:
+ 2003 005430             !       24 commands x (8-byte header + 8*32-byte rows)
+ 2004 005430             !       = 24 x 264-byte transactions
+ 2005 005430             !
+ 2006 005430             ! Landscape:
+ 2007 005430             !       32 commands x (8-byte header + 8*24-byte rows)
+ 2008 005430             !       = 32 x 200-byte transactions
+ 2009 005430             !
+ 2010 005430             ! No HP-IB simple-output transaction remains active while CRT memory is read.
+ 2011 005430             ! A dedicated 264-byte SIIPKT buffer holds the largest complete command.
+ 2012 005430             ! ============================================================
+ 2013 005430             
+ 2014 005430 230         SIIDRV  BIN
+ 2015 005431 114 261 233         LDMD R14,=BINTAB
+      005434 202 
+ 2016 005435 120 014 264         LDBD R20,X14,PSOVAL
+      005440 346 015 
+ 2017 005442 310 000             CMB R20,=0
+ 2018 005444 366 005             JNZ SIILGO
+ 2019 005446             
+ 2020 005446 306 110 013         JSB X14,SIIPOR
+ 2021 005451 360 004             JMP SIIFEED
+ 2022 005453             
+ 2023 005453 014 306 337 SIILGO  JSB X14,SIILND
+      005456 013 
+ 2024 005457             
+ 2025 005457             ! Feed four lines after the completed image so the hardcopy clears the
+ 2026 005457             ! mechanism.  This remains identical in intent to the v0.10h5 path.
+ 2027 005457             
+ 2028 005457 230         SIIFEED BIN
+ 2029 005460 114 261 233         LDMD R14,=BINTAB
+      005463 202 
+ 2030 005464 014 306 354         JSB X14,HPIB7
+      005467 006 
+ 2031 005470 130 251 003         LDM R30,=3D,0
+Page   37                                                             
+CAPASM
+
+      005473 000 
+ 2032 005474 132 251 037         LDM R32,=SIIFD4
+      005477 015 
+ 2033 005500 323 233 202         ADMD R32,=BINTAB
+ 2034 005503 014 306 161         JSB X14,HPOUT
+      005506 007 
+ 2035 005507 236                 RTN
+ 2036 005510             
+ 2037 005510             
+ 2038 005510             ! ------------------------------------------------------------
+ 2039 005510             ! SIIPOR -- portrait, 256 x 192 source raster, eight rows per command.
+ 2040 005510             !
+ 2041 005510             ! zoom 1: m=0, x=32 bytes, y=8 dots -> 24 blocks
+ 2042 005510             ! zoom 2: m=3, x=32 bytes, y=8 dots -> 24 blocks, printer-side 2x scale
+ 2043 005510             !
+ 2044 005510             ! Each block is built completely in SIIPKT before HPOUT begins:
+ 2045 005510             !
+ 2046 005510             !       8-byte GS v 0 header
+ 2047 005510             !       8 x 32-byte CRT rows = 256 bytes
+ 2048 005510             !       total = 264 decimal bytes
+ 2049 005510             !
+ 2050 005510             ! 192 source rows divide exactly into 24 complete eight-row blocks.
+ 2051 005510             ! ------------------------------------------------------------
+ 2052 005510             
+ 2053 005510 230         SIIPOR  BIN
+ 2054 005511 114 261 233         LDMD R14,=BINTAB
+      005514 202 
+ 2055 005515             
+ 2056 005515             ! Start at physical top CRT row.
+ 2057 005515             
+ 2058 005515 146 251 000         LDM R46,=0,20
+      005520 020 
+ 2059 005521 014 267 350         STMD R46,X14,PSRADR
+      005524 015 
+ 2060 005525 120 222             CLB R20
+ 2061 005527 266 352 015         STBD R20,X14,PSROW
+ 2062 005532             
+ 2063 005532             ! Begin a new eight-row packet and copy the appropriate header.
+ 2064 005532             
+ 2065 005532 230         SIPBAT  BIN
+ 2066 005533 114 261 233         LDMD R14,=BINTAB
+      005536 202 
+ 2067 005537 120 014 264         LDBD R20,X14,PSZVAL
+      005542 345 015 
+ 2068 005544 310 001             CMB R20,=1
+ 2069 005546 367 006             JZR SIPBH1
+ 2070 005550             
+ 2071 005550 146 251 007         LDM R46,=SIP2B8
+      005553 015 
+ 2072 005554 360 004             JMP SIPBHG
+ 2073 005556             
+ 2074 005556 146 251 377 SIPBH1  LDM R46,=SIP1B8
+      005561 014 
+ 2075 005562             
+ 2076 005562 146 323 233 SIPBHG  ADMD R46,=BINTAB
+      005565 202 
+ 2077 005566 014 306 077         JSB X14,SIIHDR
+      005571 014 
+ 2078 005572             
+ 2079 005572 230                 BIN
+ 2080 005573 114 261 233         LDMD R14,=BINTAB
+      005576 202 
+ 2081 005577 120 250 010         LDB R20,=10
+ 2082 005602 014 266 167         STBD R20,X14,SIIBCT
+Page   38                                                             
+CAPASM
+
+      005605 017 
+ 2083 005606             
+ 2084 005606             ! Capture one CRT row and append its 32 bytes to SIIPKT.
+ 2085 005606             
+ 2086 005606 230         SIPRLP  BIN
+ 2087 005607 114 261 233         LDMD R14,=BINTAB
+      005612 202 
+ 2088 005613 146 014 265         LDMD R46,X14,PSRADR
+      005616 350 015 
+ 2089 005620 306 262 014         JSB X14,READROW
+ 2090 005623             
+ 2091 005623 230                 BIN
+ 2092 005624 114 261 233         LDMD R14,=BINTAB
+      005627 202 
+ 2093 005630 130 251 040         LDM R30,=32D,0
+      005633 000 
+ 2094 005634 132 251 203         LDM R32,=ROWBUF
+      005637 020 
+ 2095 005640 323 233 202         ADMD R32,=BINTAB
+ 2096 005643 014 306 142         JSB X14,SIICPY
+      005646 014 
+ 2097 005647             
+ 2098 005647             ! Row 191 is the final source row.  The current packet is then necessarily
+ 2099 005647             ! complete because 192 is divisible by eight; send it and finish.
+ 2100 005647             
+ 2101 005647 230                 BIN
+ 2102 005650 114 261 233         LDMD R14,=BINTAB
+      005653 202 
+ 2103 005654 120 014 264         LDBD R20,X14,PSROW
+      005657 352 015 
+ 2104 005661 310 277             CMB R20,=277
+ 2105 005663 367 041             JZR SIPFIN
+ 2106 005665             
+ 2107 005665             ! Advance to the next physical CRT row.
+ 2108 005665             
+ 2109 005665 210                 ICB R20
+ 2110 005666 266 352 015         STBD R20,X14,PSROW
+ 2111 005671 146 265 350         LDMD R46,X14,PSRADR
+      005674 015 
+ 2112 005675 313 100 000         ADM R46,=100,0
+ 2113 005700 267 350 015         STMD R46,X14,PSRADR
+ 2114 005703             
+ 2115 005703             ! Continue until eight rows have been appended.
+ 2116 005703             
+ 2117 005703 120 264 167         LDBD R20,X14,SIIBCT
+      005706 017 
+ 2118 005707 212                 DCB R20
+ 2119 005710 266 167 017         STBD R20,X14,SIIBCT
+ 2120 005713 366 271             JNZ SIPRLP
+ 2121 005715             
+ 2122 005715             ! Send one complete 264-byte block, then build the next one.
+ 2123 005715             
+ 2124 005715 130 251 010         LDM R30,=8D,1
+      005720 001 
+ 2125 005721 306 200 014         JSB X14,SIISND
+ 2126 005724 360 204             JMP SIPBAT
+ 2127 005726             
+ 2128 005726 130 251 010 SIPFIN  LDM R30,=8D,1
+      005731 001 
+ 2129 005732 014 306 200         JSB X14,SIISND
+      005735 014 
+ 2130 005736 236                 RTN
+ 2131 005737             
+ 2132 005737             
+Page   39                                                             
+CAPASM
+
+ 2133 005737             ! ------------------------------------------------------------
+ 2134 005737             ! SIILND -- 90-degree clockwise landscape, 192 x 256 result.
+ 2135 005737             !
+ 2136 005737             ! TJLBD already produces exactly eight consecutive 24-byte rotated rows in
+ 2137 005737             ! TLBUF.  v0.10i therefore maps one transpose band directly to one SII block:
+ 2138 005737             !
+ 2139 005737             !       8-byte GS v 0 header
+ 2140 005737             !       192-byte TLBUF payload
+ 2141 005737             !       total = 200 decimal bytes
+ 2142 005737             !
+ 2143 005737             ! 32 source-byte bands -> 32 printer transactions instead of 256.
+ 2144 005737             ! ------------------------------------------------------------
+ 2145 005737             
+ 2146 005737 230         SIILND  BIN
+ 2147 005740 114 261 233         LDMD R14,=BINTAB
+      005743 202 
+ 2148 005744 120 222             CLB R20
+ 2149 005746 014 266 353         STBD R20,X14,PSLBND
+      005751 015 
+ 2150 005752             
+ 2151 005752 014 306 264 SILLOP  JSB X14,TJLBD
+      005755 010 
+ 2152 005756             
+ 2153 005756             ! Copy the appropriate y=8 landscape header into SIIPKT.
+ 2154 005756             
+ 2155 005756 230                 BIN
+ 2156 005757 114 261 233         LDMD R14,=BINTAB
+      005762 202 
+ 2157 005763 120 014 264         LDBD R20,X14,PSZVAL
+      005766 345 015 
+ 2158 005770 310 001             CMB R20,=1
+ 2159 005772 367 006             JZR SILBH1
+ 2160 005774             
+ 2161 005774 146 251 027         LDM R46,=SIL2B8
+      005777 015 
+ 2162 006000 360 004             JMP SILBHG
+ 2163 006002             
+ 2164 006002 146 251 017 SILBH1  LDM R46,=SIL1B8
+      006005 015 
+ 2165 006006             
+ 2166 006006 146 323 233 SILBHG  ADMD R46,=BINTAB
+      006011 202 
+ 2167 006012 014 306 077         JSB X14,SIIHDR
+      006015 014 
+ 2168 006016             
+ 2169 006016             ! Append all eight rotated rows in one contiguous 192-byte copy.
+ 2170 006016             
+ 2171 006016 230                 BIN
+ 2172 006017 114 261 233         LDMD R14,=BINTAB
+      006022 202 
+ 2173 006023 130 251 300         LDM R30,=192D,0
+      006026 000 
+ 2174 006027 132 251 365         LDM R32,=TLBUF
+      006032 015 
+ 2175 006033 323 233 202         ADMD R32,=BINTAB
+ 2176 006036 014 306 142         JSB X14,SIICPY
+      006041 014 
+ 2177 006042             
+ 2178 006042             ! Send the complete 200-byte block.
+ 2179 006042             
+ 2180 006042 130 251 310         LDM R30,=200D,0
+      006045 000 
+ 2181 006046 014 306 200         JSB X14,SIISND
+      006051 014 
+Page   40                                                             
+CAPASM
+
+ 2182 006052             
+ 2183 006052             ! Advance source-byte band 0..31 (00..37 octal).
+ 2184 006052             
+ 2185 006052 230                 BIN
+ 2186 006053 114 261 233         LDMD R14,=BINTAB
+      006056 202 
+ 2187 006057 120 014 264         LDBD R20,X14,PSLBND
+      006062 353 015 
+ 2188 006064 310 037             CMB R20,=37
+ 2189 006066 367 006             JZR SILDON
+ 2190 006070             
+ 2191 006070 210                 ICB R20
+ 2192 006071 266 353 015         STBD R20,X14,PSLBND
+ 2193 006074 360 254             JMP SILLOP
+ 2194 006076             
+ 2195 006076 236         SILDON  RTN
+ 2196 006077             
+ 2197 006077             
+ 2198 006077             ! ------------------------------------------------------------
+ 2199 006077             ! SIIHDR -- initialize SIIPKT with an 8-byte GS v 0 block header.
+ 2200 006077             !
+ 2201 006077             ! Input:
+ 2202 006077             !       R46/R47 = absolute pointer to 8-byte header
+ 2203 006077             !
+ 2204 006077             ! Output:
+ 2205 006077             !       SIIPKT[0..7] = header
+ 2206 006077             !       SIIDST        = absolute pointer to SIIPKT+8
+ 2207 006077             ! ------------------------------------------------------------
+ 2208 006077             
+ 2209 006077 230         SIIHDR  BIN
+ 2210 006100 114 261 233         LDMD R14,=BINTAB
+      006103 202 
+ 2211 006104 134 251 170         LDM R34,=SIIPKT
+      006107 017 
+ 2212 006110 323 233 202         ADMD R34,=BINTAB
+ 2213 006113 122 250 010         LDB R22,=10
+ 2214 006116             
+ 2215 006116 136 046 340 SIHHLP  POBD R36,+R46
+ 2216 006121 034 344             PUBD R36,+R34
+ 2217 006123 122 212             DCB R22
+ 2218 006125 366 367             JNZ SIHHLP
+ 2219 006127             
+ 2220 006127 230                 BIN
+ 2221 006130 114 261 233         LDMD R14,=BINTAB
+      006133 202 
+ 2222 006134 134 014 267         STMD R34,X14,SIIDST
+      006137 165 017 
+ 2223 006141 236                 RTN
+ 2224 006142             
+ 2225 006142             
+ 2226 006142             ! ------------------------------------------------------------
+ 2227 006142             ! SIICPY -- append a source block to the current SII packet.
+ 2228 006142             !
+ 2229 006142             ! Input:
+ 2230 006142             !       R30/R31 = byte count, non-zero
+ 2231 006142             !       R32/R33 = absolute source pointer
+ 2232 006142             !
+ 2233 006142             ! SIIDST is advanced by the copied byte count.
+ 2234 006142             ! ------------------------------------------------------------
+ 2235 006142             
+ 2236 006142 230         SIICPY  BIN
+ 2237 006143 114 261 233         LDMD R14,=BINTAB
+      006146 202 
+ 2238 006147 134 014 265         LDMD R34,X14,SIIDST
+Page   41                                                             
+CAPASM
+
+      006152 165 017 
+ 2239 006154             
+ 2240 006154 136 032 340 SICPLP  POBD R36,+R32
+ 2241 006157 034 344             PUBD R36,+R34
+ 2242 006161 130 213             DCM R30
+ 2243 006163 366 367             JNZ SICPLP
+ 2244 006165             
+ 2245 006165 230                 BIN
+ 2246 006166 114 261 233         LDMD R14,=BINTAB
+      006171 202 
+ 2247 006172 134 014 267         STMD R34,X14,SIIDST
+      006175 165 017 
+ 2248 006177 236                 RTN
+ 2249 006200             
+ 2250 006200             
+ 2251 006200             ! ------------------------------------------------------------
+ 2252 006200             ! SIISND -- transmit the complete packet currently in SIIPKT.
+ 2253 006200             !
+ 2254 006200             ! Input:
+ 2255 006200             !       R30/R31 = total packet length (264 portrait, 200 landscape)
+ 2256 006200             !
+ 2257 006200             ! HPOUT remains the proven self-contained simple-output transaction.  The
+ 2258 006200             ! selected HP-IB translator is reconstructed dynamically by HPIB7/PSCODE.
+ 2259 006200             ! ------------------------------------------------------------
+ 2260 006200             
+ 2261 006200 230         SIISND  BIN
+ 2262 006201 114 261 233         LDMD R14,=BINTAB
+      006204 202 
+ 2263 006205 156 030 241         LDM R56,R30
+ 2264 006210 014 306 354         JSB X14,HPIB7
+      006213 006 
+ 2265 006214             
+ 2266 006214 230                 BIN
+ 2267 006215 114 261 233         LDMD R14,=BINTAB
+      006220 202 
+ 2268 006221 130 056 241         LDM R30,R56
+ 2269 006224 132 251 170         LDM R32,=SIIPKT
+      006227 017 
+ 2270 006230 323 233 202         ADMD R32,=BINTAB
+ 2271 006233 014 306 161         JSB X14,HPOUT
+      006236 007 
+ 2272 006237 236                 RTN
+ 2273 006240             
+ 2274 006240             
+ 2275 006240             ! ============================================================
+ 2276 006240             ! PREST -- restore caller's CRT byte pointer after hardcopy reads.
+ 2277 006240             ! ============================================================
+ 2278 006240             
+ 2279 006240 230         PREST   BIN
+ 2280 006241 114 261 233         LDMD R14,=BINTAB
+      006244 202 
+ 2281 006245 134 014 265         LDMD R34,X14,SAVCRT
+      006250 200 020 
+ 2282 006252 316 022 073         JSB =BYTCR!
+ 2283 006255 316 335 074         JSB =CHKSTS
+ 2284 006260 230                 BIN
+ 2285 006261 236                 RTN
+ 2286 006262             
+ 2287 006262             
+ 2288 006262             ! ============================================================
+ 2289 006262             ! READROW
+ 2290 006262             !
+ 2291 006262             ! Read the complete 256-pixel physical scanline:
+ 2292 006262             !
+Page   42                                                             
+CAPASM
+
+ 2293 006262             !       32 sequential CRT bytes -> ROWBUF
+ 2294 006262             !
+ 2295 006262             !
+ 2296 006262             ! Input:
+ 2297 006262             !
+ 2298 006262             !       R46/R47 = physical CRT row-base nibble address
+ 2299 006262             !
+ 2300 006262             !
+ 2301 006262             ! BREAD-style strategy:
+ 2302 006262             !
+ 2303 006262             !       BYTCR! once
+ 2304 006262             !
+ 2305 006262             !       CRTFLG = 0:  repeated INCHR
+ 2306 006262             !       CRTFLG = 1:  repeated INCHR-
+ 2307 006262             !
+ 2308 006262             ! Both routines return the CRT byte in R32 and advance CRTBAD.
+ 2309 006262             ! The mode decision is made once per scanline, not once per byte.
+ 2310 006262             ! ============================================================
+ 2311 006262             
+ 2312 006262 230         READROW BIN
+ 2313 006263             
+ 2314 006263             
+ 2315 006263             ! ------------------------------------------------------------
+ 2316 006263             ! Position at first byte of physical scanline.
+ 2317 006263             ! ------------------------------------------------------------
+ 2318 006263             
+ 2319 006263 134 046 240         LDB R34,R46
+ 2320 006266 135 047 240         LDB R35,R47
+ 2321 006271             
+ 2322 006271 316 022 073         JSB =BYTCR!
+ 2323 006274             
+ 2324 006274             
+ 2325 006274             ! ------------------------------------------------------------
+ 2326 006274             ! R34/R35 can now be reused as the RAM destination pointer.
+ 2327 006274             ! Hardware CRTBAD retains the row address.
+ 2328 006274             ! ------------------------------------------------------------
+ 2329 006274             
+ 2330 006274 230                 BIN
+ 2331 006275             
+ 2332 006275 134 251 203         LDM R34,=ROWBUF
+      006300 020 
+ 2333 006301             
+ 2334 006301 323 233 202         ADMD R34,=BINTAB
+ 2335 006304             
+ 2336 006304             
+ 2337 006304             ! ------------------------------------------------------------
+ 2338 006304             ! 32 decimal bytes = 40 octal.
+ 2339 006304             ! ------------------------------------------------------------
+ 2340 006304             
+ 2341 006304 122 250 040         LDB R22,=40
+ 2342 006307             
+ 2343 006307             
+ 2344 006307             ! ------------------------------------------------------------
+ 2345 006307             ! Select the read loop once for this scanline.
+ 2346 006307             ! ------------------------------------------------------------
+ 2347 006307             
+ 2348 006307 114 261 233         LDMD R14,=BINTAB
+      006312 202 
+ 2349 006313             
+ 2350 006313 120 014 264         LDBD R20,X14,CRTFLG
+      006316 202 020 
+ 2351 006320             
+ 2352 006320 310 000             CMB R20,=0
+ 2353 006322             
+Page   43                                                             
+CAPASM
+
+ 2354 006322 367 013             JZR RRNORM
+ 2355 006324             
+ 2356 006324             
+ 2357 006324             ! ------------------------------------------------------------
+ 2358 006324             ! FAST LOOP - CRT is wiped out.
+ 2359 006324             ! ------------------------------------------------------------
+ 2360 006324             
+ 2361 006324 316 220 072 RRFST   JSB =INCHR-
+ 2362 006327             
+ 2363 006327 132 034 344         PUBD R32,+R34
+ 2364 006332             
+ 2365 006332 122 212             DCB R22
+ 2366 006334             
+ 2367 006334 366 366             JNZ RRFST
+ 2368 006336             
+ 2369 006336 236                 RTN
+ 2370 006337             
+ 2371 006337             
+ 2372 006337             ! ------------------------------------------------------------
+ 2373 006337             ! NORMAL LOOP - CRT is active.
+ 2374 006337             ! ------------------------------------------------------------
+ 2375 006337             
+ 2376 006337 316 244 072 RRNORM  JSB =INCHR
+ 2377 006342             
+ 2378 006342 132 034 344         PUBD R32,+R34
+ 2379 006345             
+ 2380 006345 122 212             DCB R22
+ 2381 006347             
+ 2382 006347 366 366             JNZ RRNORM
+ 2383 006351             
+ 2384 006351 236                 RTN
+ 2385 006352             
+ 2386 006352             
+ 2387 006352             ! ============================================================
+ 2388 006352             ! ============================================================
+ 2389 006352             ! LOCAL DATA
+ 2390 006352             ! ============================================================
+ 2391 006352             
+ 2392 006352 120 122 111 HMSG    ASC "PRINTER85 V0.01A"
+      006355 116 124 105 
+      006360 122 070 065 
+      006363 040 126 060 
+      006366 056 060 061 
+      006371 101 
+ 2393 006372             
+ 2394 006372             ! Raw text / keyboard paper-control bytes.
+ 2395 006372             ! All byte constants are octal.
+ 2396 006372 012         HCLF    BYT 12                  ! ASCII LF = 0Ah
+ 2397 006373 014         HCFF    BYT 14                  ! ASCII FF = 0Ch (ThinkJet page advance)
+ 2398 006374 033 144 102 SIIPG   BYT 33,144,102          ! ESC d 66 decimal (0102 octal)
+ 2399 006377             
+ 2400 006377             ! SII IFD501 eight-row raster headers.  All byte constants are octal.
+ 2401 006377             !
+ 2402 006377             ! GS v 0 m xL xH yL yH, with y=8 (010 octal) for each batched command.
+ 2403 006377             ! Portrait x=32 bytes (040 octal); landscape x=24 bytes (030 octal).
+ 2404 006377             ! m=0 native size, m=3 double width + double height.
+ 2405 006377 035 166 060 SIP1B8  BYT 35,166,60,0,40,0,10,0
+      006402 000 040 000 
+      006405 010 000 
+ 2406 006407 035 166 060 SIP2B8  BYT 35,166,60,3,40,0,10,0
+      006412 003 040 000 
+      006415 010 000 
+ 2407 006417 035 166 060 SIL1B8  BYT 35,166,60,0,30,0,10,0
+      006422 000 030 000 
+Page   44                                                             
+CAPASM
+
+      006425 010 000 
+ 2408 006427 035 166 060 SIL2B8  BYT 35,166,60,3,30,0,10,0
+      006432 003 030 000 
+      006435 010 000 
+ 2409 006437             
+ 2410 006437             ! ESC d 4 -- feed four lines after raster output.
+ 2411 006437 033 144 004 SIIFD4  BYT 33,144,4
+ 2412 006442             
+ 2413 006442             ! ThinkJet 2225A protocol bytes.  ESC*r192S selects the 192 x 96 dpi
+ 2414 006442             ! high-density graphics grid (maximum 1280 dots per raster row).
+ 2415 006442             ! Decimal ESC=27 is octal 033.
+ 2416 006442 033         TJ192S  BYT 33
+ 2417 006443 052 162 061         ASC "*r192S"
+      006446 071 062 123 
+ 2418 006451 033         TJSTAR  BYT 33
+ 2419 006452 052 162 101         ASC "*rA"
+ 2420 006455 033         TJ32W   BYT 33
+ 2421 006456 052 142 063         ASC "*b32W"
+      006461 062 127 
+ 2422 006463 033         TJ64W   BYT 33
+ 2423 006464 052 142 066         ASC "*b64W"
+      006467 064 127 
+ 2424 006471 033         TJ128W  BYT 33
+ 2425 006472 052 142 061         ASC "*b128W"
+      006475 062 070 127 
+ 2426 006500 033         TJ24W   BYT 33
+ 2427 006501 052 142 062         ASC "*b24W"
+      006504 064 127 
+ 2428 006506 033         TJ48W   BYT 33
+ 2429 006507 052 142 064         ASC "*b48W"
+      006512 070 127 
+ 2430 006514 033         TJ96W   BYT 33
+ 2431 006515 052 142 071         ASC "*b96W"
+      006520 066 127 
+ 2432 006522 033         TJEND   BYT 33
+ 2433 006523 052 162 102         ASC "*rB"
+ 2434 006526             
+ 2435 006526             ! 4-bit -> 8-bit 2x pixel-doubling lookup.
+ 2436 006526 000 003 014 DUP4    BYT 0,3,14,17,60,63,74,77
+      006531 017 060 063 
+      006534 074 077 
+ 2437 006536 300 303 314         BYT 300,303,314,317,360,363,374,377
+      006541 317 360 363 
+      006544 374 377 
+ 2438 006546             
+ 2439 006546             ! 4-bit -> 16-bit 4x pixel-doubling lookup, stored in print order
+ 2440 006546             ! (high output byte first).
+ 2441 006546 000 000 000 QUAD4   BYT 0,0,0,17,0,360,0,377
+      006551 017 000 360 
+      006554 000 377 
+ 2442 006556 017 000 017         BYT 17,0,17,17,17,360,17,377
+      006561 017 017 360 
+      006564 017 377 
+ 2443 006566 360 000 360         BYT 360,0,360,17,360,360,360,377
+      006571 017 360 360 
+      006574 360 377 
+ 2444 006576 377 000 377         BYT 377,0,377,17,377,360,377,377
+      006601 017 377 360 
+      006604 377 377 
+ 2445 006606             ! ------------------------------------------------------------
+ 2446 006606             ! v0.11d inherited keyboard hardcopy / CHIDLE state
+ 2447 006606             ! ------------------------------------------------------------
+ 2448 006606             
+ 2449 006606 000 000 000 PKMODE  BSZ 10          ! PRTKEYS BASIC mode parameter as HP REAL
+Page   45                                                             
+CAPASM
+
+      ...
+      006614 000 000 
+ 2450 006616 000         KHACT   BSZ 1           ! 1 iff PRINTER85 installed the current CHIDLE stub
+ 2451 006617 000         KSHIFT  BSZ 1           ! sampled KEYSTS bit 3 for PAPER vs SHIFT+PAPER
+ 2452 006620 000 000 000 KHSAVE  BSZ 7           ! exact previous seven-byte CHIDLE image
+      ...
+      006626 000 
+ 2453 006627             
+ 2454 006627             ! Independent keyboard printer profile set by PRTSET.
+ 2455 006627 000         HCVLD   BSZ 1           ! 1 iff PRTSET contains a valid profile
+ 2456 006630 000         HCCODE  BSZ 1           ! HP-IB select code 3..10
+ 2457 006631 000         HCADDR  BSZ 1           ! HP-IB primary address 0..30
+ 2458 006632 000         HCDRIV  BSZ 1           ! 1 ThinkJet, 2 SII
+ 2459 006633 000         HCZOOM  BSZ 1           ! graphics COPY zoom
+ 2460 006634 000         HCORI   BSZ 1           ! graphics COPY orientation
+ 2461 006635             
+ 2462 006635             ! Alpha COPY state.
+ 2463 006635 000 000     TXTADR  BSZ 2           ! current alpha-row nibble address
+ 2464 006637 000         TXTROWS BSZ 1           ! visible rows remaining
+ 2465 006640 000 000 000 TXTBUF  BSZ 42          ! 34 decimal bytes = 32 chars + CR + LF
+      ...
+      006701 000 
+ 2466 006702             
+ 2467 006702             
+ 2468 006702             ! ------------------------------------------------------------
+ 2469 006702             ! PRTSCREEN / HP-IB transport state
+ 2470 006702             ! ------------------------------------------------------------
+ 2471 006702             
+ 2472 006702 000 000 000 PSDEV   BSZ 10          ! requested BASIC device selector as REAL
+      ...
+      006710 000 000 
+ 2473 006712 000 000 000 PSDRV   BSZ 10          ! requested driver as REAL
+      ...
+      006720 000 000 
+ 2474 006722 000 000 000 PSZOOM  BSZ 10          ! optional zoom REAL
+      ...
+      006730 000 000 
+ 2475 006732 000 000 000 PSORI   BSZ 10          ! optional orientation REAL
+      ...
+      006740 000 000 
+ 2476 006742 000         PSCODE  BSZ 1           ! decoded HP-IB select code 3..10
+ 2477 006743 000         PSADDR  BSZ 1           ! decoded HP-IB primary address 0..30
+ 2478 006744 000         PSDRIV  BSZ 1           ! validated driver number
+ 2479 006745 000         PSZVAL  BSZ 1           ! validated zoom 1, 2 or 4
+ 2480 006746 000         PSOVAL  BSZ 1           ! validated orientation 0 or 1
+ 2481 006747 000         PSAUTO  BSZ 1           ! 1 iff SII PRTSCREEN itself called CRTPOF
+ 2482 006750 000 000     PSRADR  BSZ 2           ! portrait current physical CRT row address
+ 2483 006752 000         PSROW   BSZ 1           ! portrait current physical raster row 0..191
+ 2484 006753             
+ 2485 006753             ! Landscape conversion state.
+ 2486 006753 000         PSLBND  BSZ 1           ! source byte-column band 0..31
+ 2487 006754 000         PSLCNT  BSZ 1           ! remaining source rows in current band
+ 2488 006755 000         PSLMSK  BSZ 1           ! destination bit mask within current output byte
+ 2489 006756 000 000     PSLSRC  BSZ 2           ! current source CRT byte nibble address
+ 2490 006760 000 000     PSLDP   BSZ 2           ! row-0 pointer to current destination byte
+ 2491 006762 000 000     PSLOUT  BSZ 2           ! current rotated row pointer while transmitting
+ 2492 006764 000         PSLRNO  BSZ 1           ! rotated row number within current 8-row band
+ 2493 006765             
+ 2494 006765             ! Rotation and horizontal-expansion buffers.
+ 2495 006765             ! TLBUF  = 8 rows x 24 bytes = 192 bytes = 0300 octal.
+ 2496 006765             ! TJSBUF = max 64 bytes for 2x expansion = 0100 octal.
+ 2497 006765             ! TJ4BUF = max 128 bytes for 4x expansion = 0200 octal.
+ 2498 006765 000 000 000 TLBUF   BSZ 300
+      ...
+Page   46                                                             
+CAPASM
+
+ 2499 007265 000 000 000 TJSBUF  BSZ 100
+      ...
+      007364 000 
+ 2500 007365 000 000 000 TJ4BUF  BSZ 200
+      ...
+      007563 000 000 
+ 2501 007565             
+ 2502 007565             ! SII v0.10i batched-raster workspace.
+ 2503 007565             ! SIIPKT = 0410 octal = 264 decimal bytes, enough for the largest packet:
+ 2504 007565             !          8-byte header + 8 x 32-byte portrait rows.
+ 2505 007565             ! SIIDST = current absolute append pointer; SIIBCT = portrait rows left in batch.
+ 2506 007565 000 000     SIIDST  BSZ 2
+ 2507 007567 000         SIIBCT  BSZ 1
+ 2508 007570 000 000 000 SIIPKT  BSZ 410
+      ...
+ 2509 010200             
+ 2510 010200             ! Saved caller CRT byte address for hardcopy operations.
+ 2511 010200 000 000     SAVCRT  BSZ 2
+ 2512 010202             
+ 2513 010202             ! Private CRT read mode used by alpha/graphics hardcopy row readers.
+ 2514 010202 000         CRTFLG  BSZ 1
+ 2515 010203             
+ 2516 010203             ! Private 32-byte graphics scanline buffer (040 octal bytes).
+ 2517 010203 000 000 000 ROWBUF  BSZ 40
+      ...
+      010241 000 000 
+ 2518 010243             
+ 2519 010243             ! ============================================================
+ 2520 010243             ! HP-85 SYSTEM SYMBOLS -- all addresses OCTAL
+ 2521 010243             ! ============================================================
+ 2522 010243             
+ 2523 010243             BINTAB  DAD 101233
+ 2524 010243             ROMFL   DAD 101231
+ 2525 010243             CHIDLE  DAD 102416
+ 2526 010243             KEYHIT  DAD 100671
+ 2527 010243             KEYSTS  DAD 177402
+ 2528 010243             EOJ2    DAD 34772
+ 2529 010243             
+ 2530 010243             CRTBYT  DAD 100176
+ 2531 010243             CRTRAM  DAD 100200
+ 2532 010243             CRTWRS  DAD 101016
+ 2533 010243             TOS     DAD 101132
+ 2534 010243             
+ 2535 010243             SCAN    DAD 11262
+ 2536 010243             NUMVP   DAD 12407
+ 2537 010243             NUMVAL  DAD 12412
+ 2538 010243             GETCM   DAD 13414
+ 2539 010243             ERRORP  DAD 6611
+ 2540 010243             
+ 2541 010243             ONER    DAD 56215
+ 2542 010243             CONINT  DAD 44321
+ 2543 010243             
+ 2544 010243             BYTCR!  DAD 35422
+ 2545 010243             CHKSTS  DAD 36335
+ 2546 010243             INCHR   DAD 35244
+ 2547 010243             INCHR-  DAD 35220
+ 2548 010243             CRTPOF  DAD 35703
+ 2549 010243             CRTPUP  DAD 35716
+ 2550 010243             
+ 2551 010243             OUTSTR  DAD 35052
+ 2552 010243             
+ 2553 010243                     FIN
+ 
+248 Symbols used:
+Page   47                                                             
+CAPASM
+
+ASCIIS  LCL 000072    50;1    27;1
+BINTAB  DAD 101233  2523;1    82;1   102;1   224;1   249;1   258;1   294;1
+                     305;1   356;1   361;1   391;1   415;1   452;1   466;1
+                     476;1   574;1   598;1   613;1   628;1   631;1   644;1
+                     651;1   657;1   671;1   681;1   690;1   724;1   759;1
+                     768;1   779;1   787;1   789;1   826;1   829;1   837;1
+                     865;1   887;1   927;1   945;1   977;1  1000;1  1022;1
+                    1073;1  1095;1  1112;1  1130;1  1135;1  1141;1  1154;1
+                    1158;1  1181;1  1200;1  1211;1  1226;1  1277;1  1292;1
+                    1340;1  1501;1  1508;1  1514;1  1531;1  1544;1  1549;1
+                    1557;1  1569;1  1583;1  1588;1  1597;1  1602;1  1621;1
+                    1629;1  1647;1  1652;1  1674;1  1712;1  1717;1  1737;1
+                    1765;1  1783;1  1785;1  1793;1  1808;1  1819;1  1823;1
+                    1853;1  1858;1  1864;1  1869;1  1889;1  1905;1  1922;1
+                    1939;1  1956;1  1976;1  2015;1  2029;1  2033;1  2054;1
+                    2066;1  2076;1  2080;1  2087;1  2092;1  2095;1  2102;1
+                    2147;1  2156;1  2166;1  2172;1  2175;1  2186;1  2210;1
+                    2212;1  2221;1  2237;1  2246;1  2262;1  2267;1  2270;1
+                    2280;1  2334;1  2348;1
+BYTCR!  DAD 035422  2544;1   784;1  1714;1  2282;1  2322;1
+CHIDLE  DAD 102416  2525;1   112;1   285;1   292;1   311;1   326;1
+CHKSTS  DAD 036335  2545;1  2283;1
+CONINT  DAD 044321  2542;1   256;1   925;1   943;1   975;1   998;1
+CRTBYT  DAD 100176  2530;1   728;1  1077;1
+CRTFLG  LCL 010202  2514;1   740;1   792;1  1074;1  1088;1  1097;1  1718;1
+                    2350;1
+CRTPOF  DAD 035703  2548;1  1092;1
+CRTPUP  DAD 035716  2549;1  1231;1
+CRTRAM  DAD 100200  2531;1   744;1
+CRTWRS  DAD 101016  2532;1   424;1   734;1  1067;1
+DUP4    LCL 006526  2436;1  1904;1  1921;1
+EOJ2    DAD 034772  2528;1   412;1   463;1
+ERMSG   LCL 000124    55;1    29;1
+ERRORP  DAD 006611  2539;1   164;1   213;1   271;1   959;1  1057;1
+GETCM   DAD 013414  2538;1   184;1
+HCADDR  LCL 006631  2457;1   366;1   578;1
+HCCLOSE LCL 001540   670;1   500;1   765;1
+HCCODE  LCL 006630  2456;1   364;1   576;1
+HCDRIV  LCL 006632  2458;1   368;1   580;1
+HCFF    LCL 006373  2397;1   656;1
+HCLF    LCL 006372  2396;1   630;1
+HCLINE  LCL 001436   627;1   484;1   489;1
+HCLOAD  LCL 001327   573;1   420;1   471;1
+HCOPEN  LCL 001407   612;1   472;1   750;1
+HCORI   LCL 006634  2460;1   372;1   584;1
+HCPAGE  LCL 001463   643;1   497;1
+HCPGTJ  LCL 001520   655;1   647;1
+HCTJCL  LCL 001640   701;1   674;1
+HCVLD   LCL 006627  2455;1    92;1   375;1   416;1   467;1
+HCZOOM  LCL 006633  2459;1   370;1   582;1
+HMSG    LCL 006352  2392;1   223;1
+HPADRO  LCL 003530  1444;1   618;1  1106;1
+HPCTRL  LCL 003476  1420;1   617;1   685;1   694;1   706;1  1105;1  1204;1
+                    1215;1  1284;1
+HPDIR   LCL 003425  1380;1  1400;1  1422;1  1448;1  1469;1
+HPDONE  LCL 003415  1369;1  1371;1  1380;1  1406;1  1430;1  1484;1
+HPIB7   LCL 003354  1339;1   614;1   682;1   691;1   701;1  1102;1  1155;1
+                    1201;1  1212;1  1278;1  1541;1  1560;1  1572;1  1816;1
+                    1833;1  1842;1  2030;1  2264;1
+HPOBF0  LCL 003405  1358;1  1360;1  1386;1  1424;1  1472;1
+HPOUT   LCL 003561  1468;1   632;1   652;1   658;1   830;1  1131;1  1136;1
+                    1159;1  1545;1  1550;1  1584;1  1589;1  1598;1  1603;1
+                    1820;1  1826;1  1854;1  1859;1  1865;1  1870;1  2034;1
+                    2271;1
+Page   48                                                             
+CAPASM
+
+HPOUT1  LCL 003570  1471;1  1478;1
+HPOUTE  LCL 003610  1480;1  1475;1
+HPSNDC  LCL 003452  1399;1   703;1  1281;1  1445;1  1452;1
+INCHR   DAD 035244  2546;1   810;1  1725;1  2376;1
+INCHR-  DAD 035220  2547;1   799;1  1722;1  2361;1
+INIT    LCL 000125    64;1    30;1
+KEYHIT  DAD 100671  2526;1   392;1
+KEYSTS  DAD 177402  2527;1   458;1   515;1   536;1   552;1
+KFDREL  LCL 001324   565;1   538;1   554;1
+KFFI    LCL 001310   557;1   558;1
+KFFO    LCL 001276   552;1   560;1
+KFFST   LCL 001273   550;1   490;1
+KFSI    LCL 001257   541;1   542;1
+KFSLW   LCL 001242   534;1   485;1
+KFSO    LCL 001245   536;1   544;1
+KGRAPH  LCL 001375   597;1   432;1
+KHACT   LCL 006616  2450;1    84;1   104;1   120;1   278;1   314;1   320;1
+                     335;1
+KHCAP   LCL 000776   407;1   395;1
+KHCREL  LCL 001050   437;1   418;1   433;1
+KHCTXT  LCL 001044   435;1   427;1
+KHOOK   LCL 000754   390;1   306;1
+KHPAP   LCL 001061   451;1   398;1
+KHPCLS  LCL 001211   500;1   487;1   493;1
+KHPPAG  LCL 001201   497;1   479;1
+KHPREL  LCL 001217   503;1   469;1
+KHPREP  LCL 001162   489;1   492;1
+KHREL   LCL 001230   515;1   437;1   498;1   503;1   518;1
+KHRET   LCL 000775   400;1 ** Not referenced!
+KHRRT   LCL 001241   520;1   517;1
+KHSAVE  LCL 006620  2452;1   110;1   293;1   324;1
+KIINIT  LCL 000147    82;1    68;1
+KIRLOP  LCL 000235   115;1   118;1
+KIRTN   LCL 000260   125;1   108;1
+KIUNLD  LCL 000177   102;1    71;1    74;1
+KPEOJ   LCL 001223   505;1   501;1
+KSHIFT  LCL 006617  2451;1   460;1   477;1
+NUMVAL  DAD 012412  2537;1   185;1
+NUMVP   DAD 012407  2536;1   151;1   180;1   193;1   201;1
+ONER    DAD 056215  2541;1   251;1   920;1   938;1   964;1   968;1
+OUTSTR  DAD 035052  2551;1   228;1
+PARSE   LCL 000044    37;1    28;1
+PKBAD   LCL 000506   271;1   263;1   287;1
+PKEYS.  LCL 000436   247;1    47;1
+PKEYSP  LCL 000275   149;1    41;1
+PKMODE  LCL 006606  2449;1   253;1   255;1
+PKOFF   LCL 000617   320;1   266;1
+PKON    LCL 000512   278;1   269;1
+PKPERR  LCL 000320   162;1   153;1
+PKPOK   LCL 000307   155;1   152;1
+PKRET   LCL 000662   337;1   280;1   315;1   322;1
+PKRSLP  LCL 000644   329;1   332;1
+PKSVLP  LCL 000550   297;1   300;1
+PN1OK   LCL 000341   184;1   181;1
+PNDONE  LCL 000375   204;1   191;1   199;1
+PNERR   LCL 000406   211;1   182;1   186;1   194;1   202;1
+PREST   LCL 006240  2279;1   769;1  1297;1
+PRNSCP  LCL 000327   178;1    39;1    40;1
+PRNSCR. LCL 002212   863;1    45;1
+PSA2    LCL 002440   964;1   914;1   957;1
+PSA3    LCL 002357   938;1   909;1
+PSA4    LCL 002310   920;1   904;1
+PSADDR  LCL 006743  2477;1   365;1   579;1  1041;1  1450;1
+PSARGOK LCL 002650  1055;1  1049;1
+Page   49                                                             
+CAPASM
+
+PSARGS  LCL 002232   886;1   358;1   867;1
+PSAUTO  LCL 006747  2481;1  1076;1  1098;1  1227;1
+PSBAD   LCL 002651  1057;1   979;1   983;1  1007;1  1028;1  1032;1  1038;1
+                    1053;1
+PSCLOSE LCL 003310  1276;1 ** Not referenced!
+PSCODE  LCL 006742  2476;1   363;1   577;1  1040;1  1341;1
+PSCRSV  LCL 002673  1073;1  1070;1
+PSDCDN  LCL 002567  1021;1  1015;1
+PSDCLP  LCL 002550  1013;1  1019;1
+PSDEV   LCL 006702  2472;1   970;1   997;1
+PSDONE  LCL 003110  1153;1  1147;1
+PSDRIV  LCL 006744  2478;1   367;1   581;1   645;1   672;1   985;1  1047;1
+                    1084;1  1113;1
+PSDRV   LCL 006712  2473;1   966;1   974;1
+PSDRV1  LCL 002512   985;1   981;1
+PSE1    LCL 002434   959;1   916;1   929;1   933;1   947;1   953;1
+PSET.   LCL 000666   354;1    46;1
+PSIOGO  LCL 002757  1102;1  1086;1  1090;1
+PSJT    LCL 003023  1128;1  1115;1
+PSLBND  LCL 006753  2486;1  1623;1  1630;1  1634;1  1660;1  2149;1  2187;1
+                    2192;1
+PSLCNT  LCL 006754  2487;1  1668;1  1691;1  1693;1
+PSLDP   LCL 006760  2490;1  1653;1  1684;1  1686;1  1738;1
+PSLGO   LCL 003104  1149;1  1144;1
+PSLMSK  LCL 006755  2488;1  1655;1  1678;1  1683;1  1689;1  1739;1
+PSLOUT  LCL 006762  2491;1  1786;1  1794;1  1796;1  1825;1  1830;1  1839;1
+PSLRNO  LCL 006764  2492;1  1788;1  1798;1  1800;1
+PSLSRC  LCL 006756  2489;1  1663;1  1698;1  1700;1  1713;1
+PSO0    LCL 002352   934;1   931;1
+PSORI   LCL 006732  2475;1   922;1   924;1
+PSOVAL  LCL 006746  2480;1   371;1   585;1   894;1   934;1  1142;1  2016;1
+PSRADR  LCL 006750  2482;1  1503;1  1509;1  1521;1  1523;1  2059;1  2088;1
+                    2111;1  2113;1
+PSRET   LCL 003342  1291;1  1233;1
+PSROW   LCL 006752  2483;1  1505;1  1515;1  1520;1  2061;1  2103;1  2110;1
+PSSTRT  LCL 002655  1066;1   603;1   868;1
+PSZOK   LCL 002425   954;1   949;1   951;1
+PSZOOM  LCL 006722  2474;1   940;1   942;1
+PSZVAL  LCL 006745  2479;1   369;1   583;1   892;1   954;1  1051;1  1532;1
+                    1809;1  2067;1  2157;1
+PVER.   LCL 000416   223;1    44;1
+PVERP   LCL 000261   132;1    38;1
+QUAD4   LCL 006546  2441;1  1955;1  1975;1
+READROW LCL 006262  2312;1  1510;1  2089;1
+ROMFL   DAD 101231  2524;1    65;1
+ROWBUF  LCL 010203  2517;1  1548;1  1556;1  1568;1  2094;1  2332;1
+RRFST   LCL 006324  2361;1  2367;1
+RRNORM  LCL 006337  2376;1  2354;1  2382;1
+RUNTIM  LCL 000056    43;1    26;1
+SAVCRT  LCL 010200  2511;1   729;1  1078;1  2281;1
+SCAN    DAD 011262  2535;1   137;1
+SICLOSE LCL 003140  1180;1  1122;1
+SICPLP  LCL 006154  2240;1  2243;1
+SICRET  LCL 003250  1233;1  1229;1
+SID2L1  LCL 003274  1261;1  1265;1
+SID2L2  LCL 003277  1262;1  1263;1
+SIDELAY LCL 003252  1243;1   678;1  1195;1
+SIDLO1  LCL 003255  1245;1  1249;1
+SIDLO2  LCL 003260  1246;1  1247;1
+SIDLY2  LCL 003271  1259;1   687;1   696;1  1208;1  1219;1
+SIHHLP  LCL 006116  2215;1  2218;1
+SIIBCT  LCL 007567  2507;1  2082;1  2117;1  2119;1
+SIICPY  LCL 006142  2236;1  2096;1  2176;1
+SIIDRV  LCL 005430  2014;1  1121;1
+Page   50                                                             
+CAPASM
+
+SIIDST  LCL 007565  2506;1  2222;1  2238;1  2247;1
+SIIFD4  LCL 006437  2411;1  2032;1
+SIIFEED LCL 005457  2028;1  2021;1
+SIIHDR  LCL 006077  2209;1  2077;1  2167;1
+SIILGO  LCL 005453  2023;1  2018;1
+SIILND  LCL 005737  2146;1  2023;1
+SIIPG   LCL 006374  2398;1   650;1
+SIIPKT  LCL 007570  2508;1  2211;1  2269;1
+SIIPOR  LCL 005510  2053;1  2020;1
+SIISND  LCL 006200  2261;1  2125;1  2129;1  2181;1
+SIL1B8  LCL 006417  2407;1  2164;1
+SIL2B8  LCL 006427  2408;1  2161;1
+SILBH1  LCL 006002  2164;1  2159;1
+SILBHG  LCL 006006  2166;1  2162;1
+SILDON  LCL 006076  2195;1  2189;1
+SILLOP  LCL 005752  2151;1  2193;1
+SIP1B8  LCL 006377  2405;1  2074;1
+SIP2B8  LCL 006407  2406;1  2071;1
+SIPBAT  LCL 005532  2065;1  2126;1
+SIPBH1  LCL 005556  2074;1  2069;1
+SIPBHG  LCL 005562  2076;1  2072;1
+SIPFIN  LCL 005726  2128;1  2105;1
+SIPRLP  LCL 005606  2086;1  2120;1
+T2BYTE  LCL 005214  1897;1  1892;1
+T4BYTE  LCL 005327  1947;1  1942;1
+T4LOOP  LCL 005313  1941;1  1944;1
+TCLLOP  LCL 004611  1769;1  1771;1
+TJ128W  LCL 006471  2424;1  1596;1
+TJ192S  LCL 006442  2416;1  1129;1
+TJ24W   LCL 006500  2426;1  1818;1
+TJ32W   LCL 006455  2420;1  1543;1
+TJ48W   LCL 006506  2428;1  1852;1
+TJ4BUF  LCL 007365  2500;1  1601;1  1868;1  1938;1
+TJ64W   LCL 006463  2422;1  1582;1
+TJ96W   LCL 006514  2430;1  1863;1
+TJCLR   LCL 004573  1763;1  1644;1
+TJEND   LCL 006522  2432;1  1157;1
+TJEXP2  LCL 005170  1887;1  1558;1  1831;1
+TJEXP4  LCL 005303  1937;1  1570;1  1840;1
+TJLBD   LCL 004264  1644;1  1625;1  2151;1
+TJLND   LCL 004214  1620;1  1149;1
+TJLRD   LCL 004445  1711;1  1670;1
+TJLSCT  LCL 004514  1736;1  1671;1
+TJLSND  LCL 004621  1782;1  1626;1
+TJLSR   LCL 004707  1807;1  1790;1
+TJPOR   LCL 003625  1500;1  1146;1
+TJSBUF  LCL 007265  2499;1  1587;1  1857;1  1888;1
+TJSTAR  LCL 006451  2418;1  1134;1
+TL48R   LCL 005072  1851;1  1834;1  1835;1
+TL96R   LCL 005131  1862;1  1843;1  1844;1  1845;1  1846;1
+TLBFIN  LCL 004444  1703;1  1694;1
+TLBLOP  LCL 004227  1625;1  1635;1
+TLBUF   LCL 006765  2498;1  1651;1  1764;1  1784;1  2174;1
+TLDONE  LCL 004263  1637;1  1632;1
+TLNORM  LCL 004505  1725;1  1720;1
+TLRDON  LCL 004510  1727;1  1723;1
+TLRLOP  LCL 004344  1670;1  1701;1
+TLSBIT  LCL 004540  1743;1  1755;1
+TLSKIP  LCL 004560  1752;1  1746;1
+TLSLOP  LCL 004646  1790;1  1802;1
+TLSMAD  LCL 004415  1691;1  1687;1
+TLSMSV  LCL 004410  1689;1  1680;1
+TLSZ1   LCL 004733  1816;1  1811;1
+TLSZ2   LCL 005000  1829;1  1813;1
+Page   51                                                             
+CAPASM
+
+TLSZ4   LCL 005031  1838;1  1814;1
+TOS     DAD 101132  2533;1   903;1   908;1   913;1
+TP128R  LCL 004155  1595;1  1573;1  1574;1  1575;1  1576;1
+TP64R   LCL 004116  1581;1  1561;1  1562;1
+TPDONE  LCL 003726  1526;1  1517;1
+TPLOOP  LCL 003647  1507;1  1524;1
+TPROW   LCL 003727  1530;1  1511;1
+TPZ1    LCL 003753  1541;1  1534;1
+TPZ2    LCL 004016  1555;1  1536;1
+TPZ4    LCL 004052  1567;1  1537;1
+TXADOK  LCL 002203   846;1   843;1
+TXCRMD  LCL 001720   740;1   737;1
+TXEOL   LCL 002117   820;1   805;1
+TXLOOP  LCL 005200  1891;1  1894;1
+TXRFST  LCL 002061   799;1   804;1
+TXRNOR  LCL 002101   810;1   794;1   815;1
+TXT1ROW LCL 002006   778;1   756;1
+TXTADR  LCL 006635  2463;1   745;1   780;1   838;1   846;1
+TXTBUF  LCL 006640  2465;1   788;1   828;1
+TXTCOPY LCL 001666   723;1   435;1
+TXTLP   LCL 001745   756;1   763;1
+TXTROWS LCL 006637  2464;1   748;1   760;1   762;1
+
+Index of source files in symbol cross reference:
+1: printer85.asm
+Assembly completed
+ 2553 lines processed, 0 error(s) 0 warning(s)
+ 4259 bytes of code written to object file
