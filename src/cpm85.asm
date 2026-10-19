@@ -154,7 +154,7 @@ CPSAVE  POBD R22,+R34
 ! Tell Teensy the HP keyboard has been attached. This port is private
 ! to the matching EBTKS development firmware; a missing Teensy
 ! handler must never prevent local K8 release.
-        STBD R20,=177742
+        STBD R20,=CPCTL
         JMP CPMRET
 
 CPBUSY  LDM R26,=BSYMSG
@@ -223,7 +223,7 @@ KREL    BIN
         JZR KRRET
 ! Detach from Teensy without consulting/awaiting the ESP32.
         CLB R22
-        STBD R22,=177742
+        STBD R22,=CPCTL
         LDM R34,=KHSAVE
         ADM R34,R14
         LDM R36,=CHIDLE
@@ -253,7 +253,7 @@ KHOOK   BIN
         JZR KHEXIT
 ! One short, write-only 8-bit I/O cycle; the Teensy ISR only queues
 ! the byte, never does storage/UART work in the HP keyboard hook.
-        STBD R22,=177741
+        STBD R22,=CPKEY
 
 ! Consume an ordinary key and return to BASIC's key-wait loop.
 KHCAPT  CLE
@@ -296,6 +296,8 @@ ROMFL   DAD 101231
 CHIDLE  DAD 102416
 KEYHIT  DAD 100671
 EOJ2    DAD 34772
+CPKEY   DAD 177741     ! EBTKS keyboard data I/O port
+CPCTL   DAD 177742     ! EBTKS keyboard attach/detach I/O port
 SCAN    DAD 11262
 OUTSTR  DAD 35052
 CONBIN  DAD 03572
