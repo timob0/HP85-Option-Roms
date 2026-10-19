@@ -1,5 +1,11 @@
 # CPM85 v0.02a — HP-85 keyboard forwarding experiment
 
+## CPM85 v0.02a — end-to-end hardware validation (2026-10-19)
+
+**PASSED.** The user confirms the complete development setup works on a physical HP-85: `CPM` redirects keystrokes into CP/M, K8 releases the keyboard back to BASIC while CP/M keeps running, and entering `CPM` again reconnects to that existing CP/M session. This extends the previously proven v0.01b keyboard hook/diagnostic tests to real Teensy→ESP32 forwarding. No firmware or ROM `main` branch has been merged; this is a successful functional checkpoint on the development branches.
+
+Open follow-ups include mapping HP-85 special/function/cursor keys, sustained rapid typing, any dropped-key/CRC retries, printer hook coexistence, ESP32 heap and concurrent disk/TFT stress testing. **The first functional test is passed; these broader regressions are not yet claimed.**
+
 ## New development-only Teensy/ESP32 bridge
 
 The physically verified v0.01b keyboard capture, K8 release, CPCOUNT and CPLAST behavior are retained in v0.02a. New v0.02a sends each **non-K8 raw KEYHIT code** to EBTKS I/O address **0177741 octal**, sends **1** to control address **0177742** on CPM attach and **0** on K8 or CPOFF detach. These ports only exist on matching Teensy `feature/cpm85-keyboard-forwarding` firmware. K8 remains a local HP release that does not depend on the ESP32.
