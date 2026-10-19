@@ -19,7 +19,9 @@
 ! Names are also changed to eliminate digits as a potential lexer issue.
 !
 ! v0.01a K8 capture and release are USER-VERIFIED on physical HP-85.
-! v0.01b fixes attributes and keyword names; numeric functions untested.
+! v0.01b verified on physical HP-85: CPCOUNT=9, CPLAST=135 (K8).
+! Keyboard takeover/release and diagnostics all passed hardware checks.
+! Keyboard-to-CP/M transport is not implemented yet.
 !
 ! CAUTION: experimental hardware build.  PRINTER85 PRTKEYS 1 installs
 ! CHIDLE and must be disabled before CPM.  This code refuses a CHIDLE

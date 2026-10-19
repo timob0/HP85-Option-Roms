@@ -2,9 +2,11 @@
 
 ## Physical HP-85 checkpoint
 
+**v0.01b hardware-confirmed (2026-10-19):** On the physical HP-85, the user loaded CPM85 v0.01b, captured nine key events, detached successfully with K8, and reported `PRINT CPCOUNT` = **9** and `PRINT CPLAST` = **135** decimal (**207 octal**, K8). These observations validate the corrected `0,55` zero-argument numeric function descriptors and their integration with the keyboard hook. The LOADBIN keyboard capture, K8 release and both numeric diagnostics are now **hardware tested**. The module still does **not** forward keystrokes to CP/M; Teensy/ESP32 transport is future work. No option-ROM merge or other firmware change was made for this test.
+
 **v0.01a hardware-confirmed:** The user reports `tests/CPMKEYS.bas` captures and displays raw keycodes and releases cleanly with K8. The standalone `CPM85` LOADBIN also loads, the `CPM` command captures normal keyboard input, and K8 successfully returns to BASIC. Thus, **keyboard ownership and K8 release are proven**. The diagnostic functions `C85COUNT` and `C85LAST` produced `Error 89 INVALID PARM` on the physical HP-85. Code inspection found that both functions mistakenly used the **SIMON85 `TEST(x,y)` two-argument function descriptor `40,55` (octal)** instead of the **zero-argument numeric function descriptor `0,55`**. Because the runtime accepted no parameters, the wrong descriptor is a direct and sufficient explanation of the error; embedded digits were also removed from the new names to avoid any separate lexer ambiguity.
 
-**v0.01b correction under test:** Keep the **same proven CHIDLE capture/release implementation** and numeric-function bodies. Fix both descriptor bytes from `40,55` to `0,55` (octal), and change diagnostic keyword names to all-letters with distinguishable three-character prefixes: `CPOFF`, `CPVER`, `CPCOUNT` and `CPLAST`. None extends the `CPM` keyword. The zero-argument descriptor is corroborated by the CAPASM assembler repository's `lex75/hpilcmd.asm` (`BYT 0,55 ! numeric, no arguments`); the new `CPCOUNT` and `CPLAST` functions are *not* yet HP-85 hardware verified. Reassemble/reload v0.01b to test the correction; assembly passing is not enough. Use `PRINT CPCOUNT` and `PRINT CPLAST` **without arguments or parentheses** after K8; the count should include the K8 keystroke and the last code should be decimal 135.
+**v0.01b correction (now hardware verified):** Keep the **same proven CHIDLE capture/release implementation** and numeric-function bodies. Fix both descriptor bytes from `40,55` to `0,55` (octal), and change diagnostic keyword names to all-letters with distinguishable three-character prefixes: `CPOFF`, `CPVER`, `CPCOUNT` and `CPLAST`. None extends the `CPM` keyword. The zero-argument descriptor is corroborated by the CAPASM assembler repository's `lex75/hpilcmd.asm` (`BYT 0,55 ! numeric, no arguments`); the new `CPCOUNT` and `CPLAST` functions have now been verified on an HP-85 (9 captured keys, last code 135). Reassemble/reload v0.01b to test the correction; assembly passing is not enough. Use `PRINT CPCOUNT` and `PRINT CPLAST` **without arguments or parentheses** after K8; the count should include the K8 keystroke and the last code should be decimal 135.
 
 
 
@@ -62,7 +64,7 @@ For the K8 detachment to work, the *captured* `KEYHIT` must be octal 207. The HP
 
 ## Recovery and limitations
 
-- The core capture/K8 release machine code passed physical HP-85 testing in v0.01a; the newly renamed v0.01b diagnostics are **not yet hardware validated**. Build success only checks assembly, not interactions with the live HP BASIC interpreter or OS hook.
+- The core capture/K8 release machine code passed physical HP-85 testing in v0.01a; the newly renamed v0.01b diagnostics are **hardware validated**. Build success only checks assembly, not interactions with the live HP BASIC interpreter or OS hook.
 - When the keyboard is captured, K8 is the intended release. A RESET may be required if the HP keyboard is unavailable or the hook misbehaves. This would interrupt HP BASIC; use sacrificial/noncritical data for these tests.
 - The LOADBIN's INIT follows the established standalone PRINTER85 pattern for LOAD, SCRATCH and RESET hook lifecycle. If RESET resets the HP interpreter hook, the module drops its ownership flag.
 - `CPCOUNT` rolls over after 255 events, and `CPLAST` includes K8 as the final code.
