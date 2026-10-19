@@ -12,3 +12,7 @@
 
 ./py311/bin/capasm src/simon85_rom.asm -b build/ROM102.bin -l build/ROM102.lst -r 2 -c -g 85
 ./py311/bin/caprom build/ROM102.bin -r build/ROM102.rom -s 8
+
+# CPM85 keyboard-only LOADBIN experiment (no Teensy/ESP32 changes).
+./py311/bin/capasm src/cpm85.asm -b build/CPM85.bin -l build/CPM85.lst -r 2 -c
+./py311/bin/caplif build/CPM85.bin -l build/CPM85.dat -f CPM85

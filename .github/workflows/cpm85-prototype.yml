@@ -1,0 +1,32 @@
+name: CPM85 keyboard LOADBIN experiment
+on:
+  push:
+    branches: [feature/cpm85-keyboard-capture]
+  workflow_dispatch:
+jobs:
+  assemble:
+    name: CAPASM CPM85 and LIF packaging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CAPASM
+        run: python -m pip install 'capasm==1.0.1'
+      - name: Assemble standalone HP-85 binary
+        run: |
+          mkdir -p build
+          capasm src/cpm85.asm -b build/CPM85.bin -l build/CPM85.lst -r 2 -c
+          caplif build/CPM85.bin -l build/CPM85.dat -f CPM85
+          test -s build/CPM85.bin
+          test -s build/CPM85.dat
+      - name: Publish experimental CPM85 LOADBIN image
+        uses: actions/upload-artifact@v4
+        with:
+          name: CPM85-LOADBIN-experimental
+          path: |
+            build/CPM85.dat
+            build/CPM85.bin
+            build/CPM85.lst
+          if-no-files-found: error
