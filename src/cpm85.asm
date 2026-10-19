@@ -1,7 +1,13 @@
 ! ======================================================================
-! CPM85 v0.01b -- HP-85 STANDALONE LOADBIN KEYBOARD CAPTURE PROBE
+! CPM85 v0.02a -- HP-85 TO EBTKS KEYBOARD FORWARDING EXPERIMENT
 !
-! Standalone proof of a reversible keyboard handoff.  NO Z80 forwarding.
+! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
+! v0.02a adds only two EBTKS write-only I/O ports:
+!   0177741 (0341 EBTKS offset): key data (raw KEYHIT byte)
+!   0177742 (0342 EBTKS offset): attach=1, detach=0
+! Keycode translation and forwarding to CP/M are on the ESP32.
+! K8 stays local; it must NEVER be forwarded to CP/M.
+! For use ONLY with matching Teensy/ESP32 DEVELOPMENT firmware.
 ! User-facing:
 !       LOADBIN "CPM85"
 !       CPM            ! capture HP keyboard; K8 (SHIFT+K4) detaches
@@ -19,9 +25,9 @@
 ! Names are also changed to eliminate digits as a potential lexer issue.
 !
 ! v0.01a K8 capture and release are USER-VERIFIED on physical HP-85.
-! v0.01b verified on physical HP-85: CPCOUNT=9, CPLAST=135 (K8).
-! Keyboard takeover/release and diagnostics all passed hardware checks.
-! Keyboard-to-CP/M transport is not implemented yet.
+! v0.01b VERIFIED on HP-85: CPCOUNT=9, CPLAST=135 (K8).
+! v0.02a I/O keyboard forwarding is NOT YET tested on hardware.
+! The prior CHIDLE control flow, K8 decode and functions are unchanged.
 !
 ! CAUTION: experimental hardware build.  PRINTER85 PRTKEYS 1 installs
 ! CHIDLE and must be disabled before CPM.  This code refuses a CHIDLE
@@ -145,6 +151,10 @@ CPSAVE  POBD R22,+R34
         STMD R44,=CHIDLE
         LDB R20,=1
         STBD R20,X14,KHACT
+! Tell Teensy the HP keyboard has been attached. This port is private
+! to the matching EBTKS development firmware; a missing Teensy
+! handler must never prevent local K8 release.
+        STBD R20,=177742
         JMP CPMRET
 
 CPBUSY  LDM R26,=BSYMSG
@@ -211,6 +221,9 @@ KREL    BIN
         LDBD R20,X14,KHACT
         CMB R20,=0
         JZR KRRET
+! Detach from Teensy without consulting/awaiting the ESP32.
+        CLB R22
+        STBD R22,=177742
         LDM R34,=KHSAVE
         ADM R34,R14
         LDM R36,=CHIDLE
@@ -238,6 +251,9 @@ KHOOK   BIN
         STBD R20,X14,KCOUNT
         CMB R22,=207
         JZR KHEXIT
+! One short, write-only 8-bit I/O cycle; the Teensy ISR only queues
+! the byte, never does storage/UART work in the HP keyboard hook.
+        STBD R22,=177741
 
 ! Consume an ordinary key and return to BASIC's key-wait loop.
 KHCAPT  CLE
@@ -268,7 +284,7 @@ KLAST   BSZ 1
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.01b TEST - NO ESP32 INPUT"
+VERMSG   ASP "CPM85 0.02a EXPERIMENTAL KEY LINK"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D

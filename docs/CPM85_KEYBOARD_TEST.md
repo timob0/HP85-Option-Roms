@@ -1,4 +1,18 @@
-# CPM85 v0.01b — keyboard-only HP-85 experiment
+# CPM85 v0.02a — HP-85 keyboard forwarding experiment
+
+## New development-only Teensy/ESP32 bridge
+
+The physically verified v0.01b keyboard capture, K8 release, CPCOUNT and CPLAST behavior are retained in v0.02a. New v0.02a sends each **non-K8 raw KEYHIT code** to EBTKS I/O address **0177741 octal**, sends **1** to control address **0177742** on CPM attach and **0** on K8 or CPOFF detach. These ports only exist on matching Teensy `feature/cpm85-keyboard-forwarding` firmware. K8 remains a local HP release that does not depend on the ESP32.
+
+**DO NOT LOAD the forwarding experiment unless you have deliberately installed the matching development firmware** and saved previous known-good firmware/images. First try the standalone v0.01b version if you need to reconfirm local hook behavior. The v0.01b source is preserved in `src/archive/cpm85_v0.01b.asm`.
+
+Build v0.02a using `build.sh` or the dedicated Actions workflow and load the new CPM85 image. Before `CPM`, boot CP/M and open its console via Telnet or the existing ST7796. Type a few ordinary printable characters on the HP keyboard, press END LINE, and verify that CP/M receives them. Press K8 to detach; BASIC should immediately accept commands, `PRINT CPLAST` should yield 135 and the previously running CP/M session must remain alive. Reenter `CPM` to attach again. Unknown HP special keys are not yet mapped to the CP/M terminal; record their raw codes with `CPMKEYS.bas`.
+
+See [the bridge integration guide in the ESP32 repository](https://github.com/timob0/EBTKS-Z80-Emulator/blob/feature/cpm85-keyboard-forwarding/CPM85_KEYBOARD_BRIDGE.md) for required firmware branches, flash order and caveats. **All v0.02a forwarding is untested on real hardware until the user runs this test.**
+
+---
+
+## Historical v0.01b keyboard-only hardware tests
 
 ## Physical HP-85 checkpoint
 

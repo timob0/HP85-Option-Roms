@@ -21,6 +21,10 @@ assert re.search(r"BYT 0,55\s*CNTFUN\s+BIN", text)
 assert re.search(r"BYT 0,55\s*LSTFUN\s+BIN", text)
 # The user-verified keyboard ownership remains unchanged.
 assert "CMB R22,=207" in text
+assert "STBD R22,=177741" in text
+assert "STBD R20,=177742" in text
+assert "STBD R22,=177742" in text
+assert text.index("CMB R22,=207") < text.index("STBD R22,=177741")
 assert "JSB =EOJ2" in text
 assert "STMD R44,=CHIDLE" in text
 assert "JSB X14,KREL" in text
