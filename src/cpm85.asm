@@ -1,24 +1,32 @@
 ! ======================================================================
-! CPM85 v0.01a -- HP-85 STANDALONE LOADBIN KEYBOARD CAPTURE PROBE
+! CPM85 v0.01b -- HP-85 STANDALONE LOADBIN KEYBOARD CAPTURE PROBE
 !
 ! Standalone proof of a reversible keyboard handoff.  NO Z80 forwarding.
 ! User-facing:
 !       LOADBIN "CPM85"
 !       CPM            ! capture HP keyboard; K8 (SHIFT+K4) detaches
-!       C85OFF         ! manual detach, if an alternative input is available
-!       C85VER         ! display this test module's version
-!       C85COUNT       ! number of captured keystrokes, modulo 256
-!       C85LAST        ! last captured RAW HP keycode, including K8
+!       CPOFF         ! manual detach, if an alternative input is available
+!       CPVER         ! display this test module's version
+!       CPCOUNT       ! number of captured keystrokes, modulo 256
+!       CPLAST        ! last captured RAW HP keycode, including K8
 !
-! CPM and C85... have deliberately DISTINCT keyword prefixes: HP's
-! abbreviated matching makes CPM and CPMCOUNT conflict.
+! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
+! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
+! v0.01a C85COUNT/C85LAST returned Error 89 INVALID PARM.
+! The proven root cause in the source was the erroneous TEST(x,y)
+! attribute (40,55 = TWO numeric parameters) copied for these
+! ZERO-argument numeric functions.  Correct descriptor: 0,55.
+! Names are also changed to eliminate digits as a potential lexer issue.
+!
+! v0.01a K8 capture and release are USER-VERIFIED on physical HP-85.
+! v0.01b fixes attributes and keyword names; numeric functions untested.
 !
 ! CAUTION: experimental hardware build.  PRINTER85 PRTKEYS 1 installs
 ! CHIDLE and must be disabled before CPM.  This code refuses a CHIDLE
 ! hook it does not recognize as idle RTN (octal 236); it never chains.
 ! Dedicated capture uses HP's proven CHIDLE/EOJ2 flow from PRINTER85
 ! standalone LOADBIN, independent of AUXROM KBDBUFFER.
-! Original CHIDLE image restored when K8 is received or C85OFF runs.
+! Original CHIDLE image restored when K8 is received or CPOFF runs.
 ! SCRATCH/LOAD unload callbacks attempt to restore the hook.
 !
 ! STOP or RESET may interrupt ordinary operation; user should initially
@@ -49,10 +57,10 @@ RUNTIM  BYT 0,0
         BYT 377,377
 
 ASCIIS  ASP "CPM"
-        ASP "C85OFF"
-        ASP "C85VER"
-        ASP "C85COUNT"
-        ASP "C85LAST"
+        ASP "CPOFF"
+        ASP "CPVER"
+        ASP "CPCOUNT"
+        ASP "CPLAST"
 
 ERMSG   BYT 377
 
@@ -168,10 +176,13 @@ VERRUN  LDM R26,=VERMSG
         JSB =OUTSTR
         RTN
 
-! Implied numeric functions: same parser/runtime form as SIMON85 TEST.
+! Implied numeric functions: HP BASIC function attribute bytes precede
+! the runtime.  0,55 OCTAL = zero args, numeric system function.
+! The previous 40,55 was TEST(x,y)'s two-numeric-argument descriptor
+! and caused Error 89 INVALID PARM on hardware.
 ! Convert unsigned 8-bit count/last code to HP floating number using
 ! ROM 0 CONBIN, then push 8-byte HP REAL onto BASIC's R12 stack.
-        BYT 40,55
+        BYT 0,55
 CNTFUN  BIN
         LDMD R14,=BINTAB
         LDM R36,=0,0
@@ -181,7 +192,7 @@ CNTFUN  BIN
         PUMD R40,+R12
         RTN
 
-        BYT 40,55
+        BYT 0,55
 LSTFUN  BIN
         LDMD R14,=BINTAB
         LDM R36,=0,0
@@ -192,7 +203,7 @@ LSTFUN  BIN
         RTN
 
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
-! Called by BASIC C85OFF, LOAD/SCRATCH unload, or from K8 processing.
+! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
 KREL    BIN
         LDMD R14,=BINTAB
         LDBD R20,X14,KHACT
@@ -255,7 +266,7 @@ KLAST   BSZ 1
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.01a TEST - NO ESP32 INPUT"
+VERMSG   ASP "CPM85 0.01b TEST - NO ESP32 INPUT"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
