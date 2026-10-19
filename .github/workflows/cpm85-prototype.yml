@@ -19,7 +19,7 @@ jobs:
       - name: Assemble standalone HP-85 binary
         run: |
           mkdir -p build
-          capasm src/cpm85.asm -b build/CPM85.bin -l build/CPM85.lst -r 2 -c
+          capasm src/cpm85.asm -b build/CPM85.bin -l build/CPM85.lst -r 2 -c || { echo '---- CAPASM listing (errors) ----'; grep -i -C 3 'error' build/CPM85.lst || tail -n 90 build/CPM85.lst; exit 1; }
           caplif build/CPM85.bin -l build/CPM85.dat -f CPM85
           test -s build/CPM85.bin
           test -s build/CPM85.dat
