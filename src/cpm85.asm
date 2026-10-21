@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.03d -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
+! CPM85 v0.03e -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -386,9 +386,11 @@ CPWAIT  LDBD R20,=CPSTATE
 ! Incoming LF is ASCII 10D (octal 12), CR is 13D (octal 15).
 ! Never use 12D/15D here: the D suffix explicitly denotes decimal.
 !
-! The reply byte bound was verified in v0.03b. Save R50 around OUTSTR
-! because CRT system functions may clobber scratch registers.
-CPREAD  LDM R50,=3,0       ! 768 reply bytes maximum
+! HP-85 multi-byte instructions extend to the next 2/8-byte register
+! boundary. R56-R57 is EXACTLY two bytes; R50-R57 is EIGHT bytes.
+! =0,3 loads 0x0300 = 768, not =3,0 which loads 3.
+! Save only this 2-byte register pair across OUTSTR.
+CPREAD  LDM R56,=0,3       ! exactly 768 reply bytes maximum
 CPRLOOP LDBD R32,=CPRPLY
         CMB R32,=0
         JZR CPDONE
@@ -400,14 +402,14 @@ CPRLOOP LDBD R32,=CPRPLY
         JMP CPNEXT
 
 CPNEWLN LDMD R14,=BINTAB
-        STMD R50,X14,CPRBUD
+        STMD R56,X14,CPRBUD
         LDM R26,=CPSPACE
         ADM R26,R14
         LDM R36,=1D,0
         JSB =OUTSTR       ! One trailing space plus native CRT newline
         LDMD R14,=BINTAB
-        LDMD R50,X14,CPRBUD
-CPNEXT  DCM R50
+        LDMD R56,X14,CPRBUD
+CPNEXT  DCM R56
         JNZ CPRLOOP
         CLB R20
         STBD R20,=CPOPC  ! Abort if a reply never terminates
@@ -486,14 +488,14 @@ KHACT   BSZ 1
 KHSAVE  BSZ 7
 KCOUNT  BSZ 1
 KLAST   BSZ 1
-CPRBUD  BSZ 2           ! reply-byte countdown, survives CRT calls
+CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.03d DISK CONTROL"
+VERMSG   ASP "CPM85 0.03e DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
