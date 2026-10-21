@@ -42,14 +42,25 @@ for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE"):
     assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
 print("PASS: CPM85 CP/M drive-control ABI and string parsers")
 
-# HP CRT OUTCHR prints control bytes as glyphs. Status text is buffered
-# per newline and emitted with OUTSTR, which actually performs a CR.
-assert "CPRLOOP LDBD R32,=CPRPLY" in text
-assert "CMB R32,=12D" in text
-assert "JZR CPNEWLN" in text
-assert "CPPRINT BIN" in text
-assert "JSB =OUTSTR" in text.split("CPPRINT BIN", 1)[1].split("CPTOUT ", 1)[0]
-assert "JSB =OUTCHR" not in text.split("CPRLOOP ", 1)[1].split("CPTOUT ", 1)[0]
-assert "CPBUF   BSZ 64" in text
+# HP CRT OUTCHR renders raw control bytes as graphics. Use the proven
+# byte-by-byte printable-char path, and OUTSTR only for actual CRT newline.
+# ASCII 10D is LF and 13D is CR; 12D and 15D were wrong (decimal!).
+reply = text.split("CPREAD  LDM R56,=0,3", 1)[1].split("CPTOUT  ASP", 1)[0]
+assert "CPRLOOP LDBD R32,=CPRPLY" in reply
+assert "CMB R32,=10D" in reply
+assert "CMB R32,=13D" in reply
+assert "CMB R32,=12D" not in reply
+assert "CMB R32,=15D" not in reply
+assert "JSB =OUTCHR" in reply
+assert "JSB =OUTSTR" in reply
+assert "LDM R36,=1D,0" in reply
+assert "LDM R26,=CPSPACE" in reply
+assert "STMD R56,X14,CPRBUD" in reply
+assert "LDMD R56,X14,CPRBUD" in reply
+assert "DCM R56" in reply
+assert "STMD R50,X14,CPRBUD" not in reply
 assert "CPRBUD  BSZ 2" in text
-print("PASS: CPSTATUS HP CRT line buffering and bounded reply")
+assert "CPSPACE ASP" in text
+assert "CPBUF   BSZ" not in text
+assert "CPPRINT BIN" not in text
+print("PASS: CPM85 v0.03e correct ASCII LF/CR and 2-byte reply counter")
