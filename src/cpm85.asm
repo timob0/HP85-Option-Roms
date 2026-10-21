@@ -266,20 +266,24 @@ LSTFUN  BIN
 
         BYT 241
 CPSTAT  BIN
-        LDB R22,=1
         LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        LDB R22,=1
         JSB X14,CPGO
         RTN
 
         BYT 241
 CPRESE  BIN
-        LDB R22,=4
         LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        LDB R22,=4
         JSB X14,CPGO
         RTN
 
         BYT 241
 CPUMNT  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
         POMD R40,-R12     ! drive string address
         POMD R42,-R12     ! drive string length
         LDB R22,=3
@@ -291,6 +295,8 @@ CPUMNT  BIN
 
         BYT 241
 CPDMNT  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
         POMD R40,-R12     ! image filename address
         POMD R42,-R12     ! image filename length
         POMD R44,-R12     ! drive string address
@@ -309,6 +315,12 @@ CPDMNT  BIN
         JSB X14,CPWRIM
         LDB R22,=2
         JSB X14,CPGO
+        RTN
+
+! A fresh BASIC statement always starts with an empty command mailbox.
+! 0 resets a previous timed-out or rejected partial command.
+CPCLR   CLB R20
+        STBD R20,=CPOPC
         RTN
 
 ! Check and stream a drive operand (one character or letter + colon).
