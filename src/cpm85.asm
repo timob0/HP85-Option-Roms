@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.02a -- HP-85 TO EBTKS KEYBOARD FORWARDING EXPERIMENT
+! CPM85 v0.03a -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -15,6 +15,10 @@
 !       CPVER         ! display this test module's version
 !       CPCOUNT       ! number of captured keystrokes, modulo 256
 !       CPLAST        ! last captured RAW HP keycode, including K8
+!       CPSTATUS      ! active / pending drive assignments
+!       CPDMNT "B:","WORK.DSK"  ! pending mount, relative to /cpm/disks
+!       CPDUMNT "B:" ! pending unmount
+!       CPRESET       ! activate desired mounts by Z80-only reset
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -55,6 +59,10 @@ PARSE   BYT 0,0
         DEF NOPARS
         BSZ 2
         BSZ 2
+        DEF NOPARS    ! CPSTATUS
+        DEF TWOSTR    ! CPDMNT
+        DEF ONESTR    ! CPDUMNT
+        DEF NOPARS    ! CPRESET
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -62,6 +70,10 @@ RUNTIM  BYT 0,0
         DEF VERRUN
         DEF CNTFUN
         DEF LSTFUN
+        DEF CPSTAT
+        DEF CPDMNT
+        DEF CPUMNT
+        DEF CPRESE
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -69,6 +81,10 @@ ASCIIS  ASP "CPM"
         ASP "CPVER"
         ASP "CPCOUNT"
         ASP "CPLAST"
+        ASP "CPSTATUS"
+        ASP "CPDMNT"
+        ASP "CPDUMNT"
+        ASP "CPRESET"
 
 ERMSG   BYT 377
 
@@ -78,6 +94,29 @@ NOPARS  LDB R47,R43
         PUMD R45,+R12
         JSB =SCAN
         RTN
+
+! Parse HP BASIC string expressions; HP assembler manual 7-20 and 8-2:
+! STREX+ scans then STREXP, GETCMA demands a comma and scans.
+! At runtime each string occupies [length (2 bytes), address (2 bytes)]
+! on R12, last expression first. No arbitrary token/string peeking.
+ONESTR  PUBD R43,+R6
+        JSB =STREX+
+        JEZ CSERR
+        JMP CSOK
+
+TWOSTR  PUBD R43,+R6
+        JSB =STREX+
+        JEZ CSERR
+        JSB =GETCMA
+        JSB =STREXP
+        JEZ CSERR
+CSOK    POBD R47,-R6
+        LDB R45,=371
+        PUMD R45,+R12
+        RTN
+CSERR   POBD R47,-R6
+        JSB =ERRORP
+        BYT 81D
 
 ! Standalone binary lifetime.  ROMFL=3 is LOADBIN, =2/5 unload as used
 ! by PRINTER85's validated standalone build; ROMFL=1 indicates RESET
@@ -214,6 +253,129 @@ LSTFUN  BIN
         PUMD R40,+R12
         RTN
 
+! ----------------------------------------------------------------------
+! HP BASIC disk control. No keyboard hook, SD, UART, JSON, or HP bus ISR
+! callbacks are added here. Each command writes bounded short ASCII to
+! four EBTKS I/O ports and waits for a reply. K8 keyboard hook unchanged.
+! The matching Teensy and ESP32 firmware are both REQUIRED.
+!
+! CPSTATUS: no arguments
+! CPRESET: explicitly resets ONLY Z80 (operator must be at CP/M prompt).
+! CPDMNT / CPDUMNT: BASIC string expressions, not numeric parameters.
+! ----------------------------------------------------------------------
+
+        BYT 241
+CPSTAT  BIN
+        LDB R22,=1
+        LDMD R14,=BINTAB
+        JSB X14,CPGO
+        RTN
+
+        BYT 241
+CPRESE  BIN
+        LDB R22,=4
+        LDMD R14,=BINTAB
+        JSB X14,CPGO
+        RTN
+
+        BYT 241
+CPUMNT  BIN
+        POMD R40,-R12     ! drive string address
+        POMD R42,-R12     ! drive string length
+        LDB R22,=3
+        LDMD R14,=BINTAB
+        JSB X14,CPWRDR
+        LDB R22,=3
+        JSB X14,CPGO
+        RTN
+
+        BYT 241
+CPDMNT  BIN
+        POMD R40,-R12     ! image filename address
+        POMD R42,-R12     ! image filename length
+        POMD R44,-R12     ! drive string address
+        POMD R46,-R12     ! drive string length
+        ! Copy the first operand to the port before the second string.
+        LDM R48,R40
+        LDM R50,R42
+        LDM R40,R44
+        LDM R42,R46
+        LDMD R14,=BINTAB
+        JSB X14,CPWRDR
+        LDB R20,=174      ! ASCII pipe separator, octal 0174
+        STBD R20,=CPARG
+        LDM R40,R48
+        LDM R42,R50
+        JSB X14,CPWRIM
+        LDB R22,=2
+        JSB X14,CPGO
+        RTN
+
+! Check and stream a drive operand (one character or letter + colon).
+CPWRDR  BIN
+        CMM R42,=1,0
+        JNC CPBAD
+        CMM R42,=3,0
+        JCY CPBAD
+CPDRLP  POBD R20,+R40
+        STBD R20,=CPARG
+        DCM R42
+        JNZ CPDRLP
+        RTN
+
+! Check image length. Teensy request buffer is bounded to 92 chars.
+CPWRIM  BIN
+        CMM R42,=1,0
+        JNC CPBAD
+        CMM R42,=80D,0
+        JCY CPBAD
+CPIMLP  POBD R20,+R40
+        STBD R20,=CPARG
+        DCM R42
+        JNZ CPIMLP
+        RTN
+
+! This is an invalid argument in the HP BASIC statement. ERROR+ never
+! returns to our routine, matching the original numeric parsers.
+CPBAD   JSB =ERRORP
+        BYT 89D
+
+! Submit one request, poll the I/O status, and display its reply.
+! Bounded nested software timeout prevents a hung HP BASIC if the ESP32
+! or Teensy has old firmware. No delays or waits run inside Teensy ISR.
+CPGO    BIN
+        STBD R22,=CPOPC
+        LDM R36,=40D,0
+CPWTOP  LDM R34,=177777
+CPWAIT  LDBD R20,=CPSTATE
+        CMB R20,=2
+        JZR CPREAD
+        CMB R20,=3
+        JZR CPREAD
+        DCM R34
+        JNZ CPWAIT
+        DCM R36
+        JNZ CPWTOP
+        LDM R26,=CPTOUT
+        ADMD R26,=BINTAB
+        LDM R36,=19D,0
+        JSB =OUTSTR
+        RTN
+
+! Each byte returned is ASCII; LF becomes HP CRT CR. The first NUL
+! releases the Teensy mailbox for the next command. OUTCHR expects R32.
+CPREAD  LDBD R32,=CPRPLY
+        CMB R32,=0
+        JZR CPDONE
+        CMB R32,=12D
+        JNZ CPCHAR
+        LDB R32,=15D
+CPCHAR  JSB =OUTCHR
+        JMP CPREAD
+CPDONE  RTN
+
+CPTOUT  ASP "CPM85 DRIVE TIMEOUT"
+
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
 ! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
 KREL    BIN
@@ -298,6 +460,15 @@ KEYHIT  DAD 100671
 EOJ2    DAD 34772
 CPKEY   DAD 177741     ! EBTKS keyboard data I/O port
 CPCTL   DAD 177742     ! EBTKS keyboard attach/detach I/O port
+CPARG   DAD 177743     ! Drive-control ASCII argument stream, W
+CPOPC   DAD 177744     ! Drive-control opcode, W
+CPSTATE DAD 177745     ! Drive-control status, R
+CPRPLY  DAD 177746     ! Drive-control result char, R
+STREX+  DAD 13623      ! SCAN + parse string expression
+STREXP  DAD 13626      ! Parse subsequent string expression
+GETCMA  DAD 13414      ! Demand comma and SCAN
+ERRORP  DAD 6611       ! Standard HP BASIC error
+OUTCHR  DAD 35114      ! Output one character to HP CRT
 SCAN    DAD 11262
 OUTSTR  DAD 35052
 CONBIN  DAD 03572
