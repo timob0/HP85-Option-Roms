@@ -356,6 +356,8 @@ CPWAIT  LDBD R20,=CPSTATE
         JNZ CPWAIT
         DCM R36
         JNZ CPWTOP
+        CLB R20
+        STBD R20,=CPOPC     ! Abort stale mailbox after timeout
         LDM R26,=CPTOUT
         ADMD R26,=BINTAB
         LDM R36,=19D,0
