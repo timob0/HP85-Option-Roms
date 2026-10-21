@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -30,3 +30,14 @@ assert "JSB =EOJ2" in text
 assert "STMD R44,=CHIDLE" in text
 assert "JSB X14,KREL" in text
 print("PASS: unique alphabetic CPM85 keywords and 0-argument numeric descriptors")
+
+# Drive control adds two HP BASIC string-expression parsers and keeps
+# original keyboard numeric functions' ABI and ISR forwarding untouched.
+assert "DEF TWOSTR" in text and "DEF ONESTR" in text
+assert "JSB =STREX+" in text and "JSB =STREXP" in text
+assert "POMD R40,-R12" in text and "POMD R42,-R12" in text
+for port in ("177743", "177744", "177745", "177746"):
+    assert port in text
+for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE"):
+    assert re.search(r"^" + label + r"\\s+BIN", text, re.M), label
+print("PASS: CPM85 CP/M drive-control ABI and string parsers")
