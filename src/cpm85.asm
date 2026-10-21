@@ -360,13 +360,13 @@ CPBAD   JSB =ERRORP
 CPGO    BIN
         STBD R22,=CPOPC
         LDM R36,=8D,0
-CPWTOP  LDM R50,=177,377
+CPWTOP  LDM R56,=177,377  ! 16-bit polling counter, not 64-bit R50
 CPWAIT  LDBD R20,=CPSTATE
         CMB R20,=2
         JZR CPREAD
         CMB R20,=3
         JZR CPREAD
-        DCM R50
+        DCM R56
         JNZ CPWAIT
         DCM R36
         JNZ CPWTOP
@@ -421,7 +421,7 @@ CPDONE  RTN
 
 CPTOUT  ASP "CPM85 DRIVE TIMEOUT"
 CPRLONG ASP "CPM85 REPLY LIMIT"
-CPSPACE ASP " "        ! OUTSTR reliably emits CRT newline after one byte
+CPSPACE BYT 40         ! octal ASCII space, one byte for OUTSTR newline
 
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
 ! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
