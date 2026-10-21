@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.03a -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
+! CPM85 v0.03b -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -355,9 +355,11 @@ CPBAD   JSB =ERRORP
 ! Submit one request, poll the I/O status, and display its reply.
 ! Bounded nested software timeout prevents a hung HP BASIC if the ESP32
 ! or Teensy has old firmware. No delays or waits run inside Teensy ISR.
+! Reply input has a separate hard byte limit, including if an unhandled
+! HP bus read keeps supplying the same non-NUL character forever.
 CPGO    BIN
         STBD R22,=CPOPC
-        LDM R36,=40D,0
+        LDM R36,=8D,0
 CPWTOP  LDM R50,=177,377
 CPWAIT  LDBD R20,=CPSTATE
         CMB R20,=2
@@ -378,17 +380,26 @@ CPWAIT  LDBD R20,=CPSTATE
 
 ! Each byte returned is ASCII; LF becomes HP CRT CR. The first NUL
 ! releases the Teensy mailbox for the next command. OUTCHR expects R32.
-CPREAD  LDBD R32,=CPRPLY
+CPREAD  LDM R50,=3,0  ! 768 bytes maximum, including NUL
+CPRLOOP LDBD R32,=CPRPLY
         CMB R32,=0
         JZR CPDONE
         CMB R32,=12D
         JNZ CPCHAR
         LDB R32,=15D
 CPCHAR  JSB =OUTCHR
-        JMP CPREAD
+        DCM R50
+        JNZ CPRLOOP
+        CLB R20
+        STBD R20,=CPOPC  ! Abort pathological/unterminated reply
+        LDM R26,=CPRLONG
+        ADMD R26,=BINTAB
+        LDM R36,=18D,0
+        JSB =OUTSTR
 CPDONE  RTN
 
 CPTOUT  ASP "CPM85 DRIVE TIMEOUT"
+CPRLONG ASP "CPM85 REPLY LIMIT"
 
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
 ! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
@@ -460,7 +471,7 @@ KLAST   BSZ 1
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.03a DISK CONTROL"
+VERMSG   ASP "CPM85 0.03b DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
