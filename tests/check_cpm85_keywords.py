@@ -39,5 +39,5 @@ assert "POMD R40,-R12" in text and "POMD R42,-R12" in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE"):
-    assert re.search(r"^" + label + r"\\s+BIN", text, re.M), label
+    assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
 print("PASS: CPM85 CP/M drive-control ABI and string parsers")
