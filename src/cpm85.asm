@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.03e -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
+! CPM85 v0.03f -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -284,10 +284,11 @@ CPRESE  BIN
 CPUMNT  BIN
         LDMD R14,=BINTAB
         JSB X14,CPCLR
-        POMD R40,-R12     ! drive string address
-        POMD R42,-R12     ! drive string length
-        LDB R22,=3
-        LDMD R14,=BINTAB
+        ! Each string contributes a 2-byte ADDRESS then 2-byte LENGTH
+        ! when popped from BASIC R12. R30/R32 end on 2-byte boundaries.
+        ! R40 and R42 do NOT: POMD R40 pops 8 bytes, corrupting R12.
+        POMD R30,-R12     ! drive string address (2 bytes)
+        POMD R32,-R12     ! drive string length  (2 bytes)
         JSB X14,CPWRDR
         LDB R22,=3
         JSB X14,CPGO
@@ -297,21 +298,18 @@ CPUMNT  BIN
 CPDMNT  BIN
         LDMD R14,=BINTAB
         JSB X14,CPCLR
-        POMD R40,-R12     ! image filename address
-        POMD R42,-R12     ! image filename length
-        POMD R44,-R12     ! drive string address
-        POMD R46,-R12     ! drive string length
-        ! Copy the first operand to the port before the second string.
-        LDM R60,R40
-        LDM R50,R42
-        LDM R40,R44
-        LDM R42,R46
-        LDMD R14,=BINTAB
+        ! Runtime strings are stacked in argument order, so last first.
+        ! Keep filename in R26 (address) / R24 (length) while emitting
+        ! the first argument from R30 (address) / R32 (length).
+        POMD R26,-R12     ! image filename address (2 bytes)
+        POMD R24,-R12     ! image filename length  (2 bytes)
+        POMD R30,-R12     ! drive string address   (2 bytes)
+        POMD R32,-R12     ! drive string length    (2 bytes)
         JSB X14,CPWRDR
         LDB R20,=174      ! ASCII pipe separator, octal 0174
         STBD R20,=CPARG
-        LDM R40,R60
-        LDM R42,R50
+        LDM R30,R26       ! exactly 2 bytes; no overlapping R40..R47
+        LDM R32,R24       ! exactly 2 bytes
         JSB X14,CPWRIM
         LDB R22,=2
         JSB X14,CPGO
@@ -324,26 +322,28 @@ CPCLR   CLB R20
         RTN
 
 ! Check and stream a drive operand (one character or letter + colon).
+! Input: R30-R31 = character address, R32-R33 = 16-bit length.
 CPWRDR  BIN
-        CMM R42,=1,0
+        CMM R32,=1,0
         JNC CPBAD
-        CMM R42,=3,0
+        CMM R32,=3,0
         JCY CPBAD
-CPDRLP  POBD R20,+R40
+CPDRLP  POBD R20,+R30
         STBD R20,=CPARG
-        DCM R42
+        DCM R32
         JNZ CPDRLP
         RTN
 
 ! Check image length. Teensy request buffer is bounded to 92 chars.
+! Input: R30-R31 = character address, R32-R33 = 16-bit length.
 CPWRIM  BIN
-        CMM R42,=1,0
+        CMM R32,=1,0
         JNC CPBAD
-        CMM R42,=80D,0
+        CMM R32,=80D,0
         JCY CPBAD
-CPIMLP  POBD R20,+R40
+CPIMLP  POBD R20,+R30
         STBD R20,=CPARG
-        DCM R42
+        DCM R32
         JNZ CPIMLP
         RTN
 
@@ -495,7 +495,7 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.03e DISK CONTROL"
+VERMSG   ASP "CPM85 0.03f DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
