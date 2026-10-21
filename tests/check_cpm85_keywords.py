@@ -41,3 +41,15 @@ for port in ("177743", "177744", "177745", "177746"):
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE"):
     assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
 print("PASS: CPM85 CP/M drive-control ABI and string parsers")
+
+# HP CRT OUTCHR prints control bytes as glyphs. Status text is buffered
+# per newline and emitted with OUTSTR, which actually performs a CR.
+assert "CPRLOOP LDBD R32,=CPRPLY" in text
+assert "CMB R32,=12D" in text
+assert "JZR CPNEWLN" in text
+assert "CPPRINT BIN" in text
+assert "JSB =OUTSTR" in text.split("CPPRINT BIN", 1)[1].split("CPTOUT ", 1)[0]
+assert "JSB =OUTCHR" not in text.split("CPRLOOP ", 1)[1].split("CPTOUT ", 1)[0]
+assert "CPBUF   BSZ 64" in text
+assert "CPRBUD  BSZ 2" in text
+print("PASS: CPSTATUS HP CRT line buffering and bounded reply")
