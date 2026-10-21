@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.03b -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
+! CPM85 v0.03c -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -378,25 +378,66 @@ CPWAIT  LDBD R20,=CPSTATE
         JSB =OUTSTR
         RTN
 
-! Each byte returned is ASCII; LF becomes HP CRT CR. The first NUL
-! releases the Teensy mailbox for the next command. OUTCHR expects R32.
-CPREAD  LDM R50,=3,0  ! 768 bytes maximum, including NUL
+! OUTCHR prints character codes literally (including the HP up-arrow
+! glyph for an ASCII control code). OUTSTR, in contrast, outputs a buffer
+! followed by a real HP CRT carriage return. Accumulate each UART line in
+! an HP local buffer and call OUTSTR for each LF. CR is ignored to accept
+! CRLF as well as LF. Maximum displayed line length is 63 characters.
+!
+! Keep the 768-byte hard reply bound in RAM: OUTSTR may change CPU
+! registers, so the remaining budget cannot live only in R50.
+CPREAD  LDMD R14,=BINTAB
+        LDM R50,=3,0     ! 3*256 = 768 bytes
+        STMD R50,X14,CPRBUD
+        CLM R42          ! current display line length
 CPRLOOP LDBD R32,=CPRPLY
         CMB R32,=0
-        JZR CPDONE
-        CMB R32,=12D
-        JNZ CPCHAR
-        LDB R32,=15D
-CPCHAR  JSB =OUTCHR
+        JZR CPFINAL
+        CMB R32,=12D    ! LF = 10 decimal = 12 octal
+        JZR CPNEWLN
+        CMB R32,=15D    ! Ignore incoming CR in CR/LF pair
+        JZR CPNEXT
+        CMM R42,=63D,0
+        JCY CPNEXT       ! clip overlong lines safely
+        LDM R26,=CPBUF
+        ADMD R26,=BINTAB
+        ADM R26,R42
+        STBD R32,R26
+        ICM R42
+        JMP CPNEXT
+
+CPNEWLN LDMD R14,=BINTAB
+        JSB X14,CPPRINT
+CPNEXT  LDMD R14,=BINTAB
+        LDMD R50,X14,CPRBUD
         DCM R50
+        STMD R50,X14,CPRBUD
         JNZ CPRLOOP
         CLB R20
-        STBD R20,=CPOPC  ! Abort pathological/unterminated reply
+        STBD R20,=CPOPC ! Abort pathological/unterminated reply
         LDM R26,=CPRLONG
         ADMD R26,=BINTAB
         LDM R36,=18D,0
         JSB =OUTSTR
+        RTN
+
+CPFINAL CMM R42,=0,0
+        JZR CPDONE
+        LDMD R14,=BINTAB
+        JSB X14,CPPRINT
 CPDONE  RTN
+
+! HP firmware OUTSTR prints precisely R36 bytes starting at R26 and
+! completes a real CRT line. Never emit raw LF/CR through OUTCHR.
+CPPRINT BIN
+        LDMD R14,=BINTAB
+        LDM R26,=CPBUF
+        ADM R26,R14
+        LDM R36,R42
+        JSB =OUTSTR
+        BIN
+        CLM R42
+        RTN
 
 CPTOUT  ASP "CPM85 DRIVE TIMEOUT"
 CPRLONG ASP "CPM85 REPLY LIMIT"
@@ -466,12 +507,14 @@ KHACT   BSZ 1
 KHSAVE  BSZ 7
 KCOUNT  BSZ 1
 KLAST   BSZ 1
+CPRBUD  BSZ 2           ! reply-byte countdown, survives CRT calls
+CPBUF   BSZ 64          ! up to 63 ASCII characters per displayed line
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.03b DISK CONTROL"
+VERMSG   ASP "CPM85 0.03c DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
