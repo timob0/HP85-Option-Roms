@@ -35,7 +35,26 @@ print("PASS: unique alphabetic CPM85 keywords and 0-argument numeric descriptors
 # original keyboard numeric functions' ABI and ISR forwarding untouched.
 assert "DEF TWOSTR" in text and "DEF ONESTR" in text
 assert "JSB =STREX+" in text and "JSB =STREXP" in text
-assert "POMD R40,-R12" in text and "POMD R42,-R12" in text
+# HP-85 POMD/LDM/CMM/DCM extend to the NEXT register boundary.
+# R30/R32 (octal) span 2 bytes, whereas R40 spans EIGHT. The first
+# hardware CPDMNT v0.03e hung because four R40..R46 POMD operations
+# consumed far more than the 8 bytes of two stacked string arguments.
+for bad in ("POMD R40,-R12", "POMD R42,-R12",
+            "POMD R44,-R12", "POMD R46,-R12"):
+    assert bad not in text, bad
+umount = text.split("CPUMNT  BIN", 1)[1].split("CPDMNT  BIN", 1)[0]
+mount = text.split("CPDMNT  BIN", 1)[1].split("CPCLR   CLB", 1)[0]
+assert umount.index("POMD R30,-R12") < umount.index("POMD R32,-R12")
+assert mount.index("POMD R26,-R12") < mount.index("POMD R24,-R12")
+assert mount.index("POMD R24,-R12") < mount.index("POMD R30,-R12")
+assert mount.index("POMD R30,-R12") < mount.index("POMD R32,-R12")
+assert mount.index("JSB X14,CPWRDR") < mount.index("STBD R20,=CPARG")
+assert mount.index("LDM R30,R26") < mount.index("LDM R32,R24") < mount.index("JSB X14,CPWRIM")
+for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
+    op = text.split(name, 1)[1].split("RTN", 1)[0]
+    assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
+    assert "CMM R42" not in op and "POBD R20,+R40" not in op
+assert 'VERMSG   ASP "CPM85 0.03f DISK CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE"):
