@@ -60,7 +60,9 @@ assert "LDMD R56,X14,CPRBUD" in reply
 assert "DCM R56" in reply
 assert "STMD R50,X14,CPRBUD" not in reply
 assert "CPRBUD  BSZ 2" in text
-assert "CPSPACE ASP" in text
+assert "CPWTOP  LDM R56,=177,377" in text
+assert "DCM R56" in text.split("CPWTOP ", 1)[1].split("CPREAD ", 1)[0]
+assert "CPSPACE BYT 40" in text
 assert "CPBUF   BSZ" not in text
 assert "CPPRINT BIN" not in text
 print("PASS: CPM85 v0.03e correct ASCII LF/CR and 2-byte reply counter")
