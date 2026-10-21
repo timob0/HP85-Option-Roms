@@ -223,7 +223,7 @@ OFFRUN  SAD
         BYT 241
 VERRUN  LDM R26,=VERMSG
         ADMD R26,=BINTAB
-        LDM R36,=33D,0
+        LDM R36,=24D,0
         JSB =OUTSTR
         RTN
 
