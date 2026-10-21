@@ -296,7 +296,7 @@ CPDMNT  BIN
         POMD R44,-R12     ! drive string address
         POMD R46,-R12     ! drive string length
         ! Copy the first operand to the port before the second string.
-        LDM R48,R40
+        LDM R60,R40
         LDM R50,R42
         LDM R40,R44
         LDM R42,R46
@@ -304,7 +304,7 @@ CPDMNT  BIN
         JSB X14,CPWRDR
         LDB R20,=174      ! ASCII pipe separator, octal 0174
         STBD R20,=CPARG
-        LDM R40,R48
+        LDM R40,R60
         LDM R42,R50
         JSB X14,CPWRIM
         LDB R22,=2
