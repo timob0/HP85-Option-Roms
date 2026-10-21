@@ -1,7 +1,7 @@
 name: CPM85 keyboard LOADBIN experiment
 on:
   push:
-    branches: [feature/cpm85-keyboard-capture]
+    branches: [feature/cpm85-keyboard-capture, feature/cpm85-drive-control]
   workflow_dispatch:
 jobs:
   assemble:
