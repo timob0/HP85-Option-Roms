@@ -110,7 +110,7 @@ assert "LDMD R30,X14,CPNMADR" in banner
 assert "LDMD R32,X14,CPNMLEN" in banner
 assert "LDM R36,=12D,0" in banner
 assert "JSB =OUTSTR" in banner
-assert "CPMKBUF BSZ 96" in text
+assert "CPMKBUF BSZ 96D" in text  # decimal literal: CAPASM defaults to octal
 assert "CPENDNL BSZ 1" in text
 reply = text.split("CPREAD  LDMD R14,=BINTAB",1)[1].split("CPTOUT  ASP",1)[0]
 assert "STBD R20,X14,CPENDNL" in reply
@@ -120,3 +120,42 @@ assert "JZR CPFIN" in reply
 assert "JSB =OUTSTR       ! native HP-85 CRT newline" in reply
 assert "JSB =OUTCHR" in reply
 print("PASS: CPDMK named progress and final native HP-85 BASIC newline")
+
+# All statement commands (as distinct from CPCOUNT/CPLAST numeric
+# functions) must return with an HP CRT native newline. The CPM startup
+# message, already-attached and busy paths all need their own OUTSTR.
+startup = text.split("CPMRUN  SAD",1)[1].split("OFFRUN  SAD",1)[0]
+assert "JNZ CPALRD" in startup
+for entry, following in (("CPALRD  LDM","CPBUSY  LDM"),
+                         ("CPBUSY  LDM","CPMRET  BIN")):
+    path = startup.split(entry,1)[1].split(following,1)[0]
+    assert "JSB =OUTSTR" in path, entry
+    assert "JMP CPMRET" in path or entry.startswith("CPBUSY"), entry
+assert 'ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"' in text
+assert "JSB =OUTSTR" in startup.split("CPMRUN  SAD",1)[-1].split("CPALRD  LDM",1)[0]
+for start,end in (("OFFRUN  SAD", "VERRUN  LDM"),
+                  ("VERRUN  LDM", "CNTFUN  BIN")):
+    assert "JSB =OUTSTR" in text.split(start,1)[1].split(end,1)[0], start
+
+# These six HP BASIC statements have no independent print paths: each must
+# reach CPGO, which handles success, error, timeout and reply-limit newlines.
+for start,end in (("CPSTAT  BIN","CPRESE  BIN"),
+                  ("CPRESE  BIN","CPUMNT  BIN"),
+                  ("CPUMNT  BIN","CPDMNT  BIN"),
+                  ("CPDMNT  BIN","CPIMGS  BIN"),
+                  ("CPIMGS  BIN","CPMAKE  BIN"),
+                  ("CPMAKE  BIN","CPBANN  BIN")):
+    body=text.split(start,1)[1].split(end,1)[0]
+    assert "JSB X14,CPGO" in body, start
+transport=text.split("CPGO    BIN",1)[1].split("CPTOUT  ASP",1)[0]
+assert "CPTOUT" in transport and "JSB =OUTSTR" in transport.split("CPTOUT",1)[1].split("CPREAD  ",1)[0]
+assert "CPRLONG" in transport and "JSB =OUTSTR" in transport.split("CPRLONG",1)[1].split("CPDONE  ",1)[0]
+assert "JZR CPDONE" in transport
+assert "JZR CPNEWLN" in transport
+assert "CPNEWLN LDMD" in transport
+assert "STBD R20,X14,CPENDNL" in transport
+assert "CPDONE  LDMD" in transport and "JZR CPFIN" in transport
+for start,end in (("CNTFUN  BIN","LSTFUN  BIN"),
+                  ("LSTFUN  BIN","CPSTAT  BIN")):
+    assert "JSB =OUTSTR" not in text.split(start,1)[1].split(end,1)[0]
+print("PASS: all nine CPM85 statements leave a fresh HP BASIC input line; numeric functions unchanged")
