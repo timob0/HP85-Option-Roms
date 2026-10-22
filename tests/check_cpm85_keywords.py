@@ -54,7 +54,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.04a DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.04b DISK CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE"):
@@ -96,3 +96,27 @@ assert "LDM R36,=250D,0" in text
 assert "CMB R22,=6" in text
 assert "CMB R22,=207" not in image_create
 print("PASS: HP CPM85 image-command ABI, string pair width, and bounded timeout")
+
+# HP must display CPDMK's filename before the long wait using the native
+# OUTSTR path, never by interpreting raw LF as an OUTCHR glyph.
+make = text.split("CPMAKE  BIN",1)[1].split("CPBANN  BIN",1)[0]
+banner = text.split("CPBANN  BIN",1)[1].split("CPCLR   CLB",1)[0]
+assert make.index("STMD R30,X14,CPNMADR") < make.index("JSB X14,CPWRIM")
+assert make.index("STMD R32,X14,CPNMLEN") < make.index("JSB X14,CPWRIM")
+assert make.index("JSB X14,CPWRIM") < make.index("JSB X14,CPBANN")
+assert make.index("JSB X14,CPBANN") < make.index("LDB R22,=6")
+assert 'CPMKPFX ASP "CREATING "' in text
+assert "LDMD R30,X14,CPNMADR" in banner
+assert "LDMD R32,X14,CPNMLEN" in banner
+assert "LDM R36,=12D,0" in banner
+assert "JSB =OUTSTR" in banner
+assert "CPMKBUF BSZ 96" in text
+assert "CPENDNL BSZ 1" in text
+reply = text.split("CPREAD  LDMD R14,=BINTAB",1)[1].split("CPTOUT  ASP",1)[0]
+assert "STBD R20,X14,CPENDNL" in reply
+assert "CPDONE  LDMD R14,=BINTAB" in reply
+assert "LDBD R20,X14,CPENDNL" in reply
+assert "JZR CPFIN" in reply
+assert "JSB =OUTSTR       ! native HP-85 CRT newline" in reply
+assert "JSB =OUTCHR" in reply
+print("PASS: CPDMK named progress and final native HP-85 BASIC newline")
