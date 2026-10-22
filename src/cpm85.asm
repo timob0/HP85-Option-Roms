@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.04a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
+! CPM85 v0.04b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -339,9 +339,46 @@ CPMAKE  BIN
         JSB X14,CPCLR
         POMD R30,-R12     ! file-name string address, exactly 2 bytes
         POMD R32,-R12     ! file-name length, exactly 2 bytes
+        ! Preserve the user's string before CPWRIM consumes its pointer/len.
+        STMD R30,X14,CPNMADR
+        STMD R32,X14,CPNMLEN
         JSB X14,CPWRIM
+        ! Only normal BASIC runtime displays progress, never CHIDLE/ISR.
+        JSB X14,CPBANN
         LDB R22,=6
         JSB X14,CPGO
+        RTN
+
+! CPDMK start banner: compose CREATING <name>... in a bounded HP
+! LOADBIN buffer and print once through native OUTSTR. OUTSTR finishes
+! the CRT line, so the name is visible before the long CPDMK wait.
+! CPWRIM has already limited this name to 79 bytes; 9+79+3 < 96.
+CPBANN  BIN
+        LDMD R14,=BINTAB
+        LDM R30,=CPMKPFX
+        ADM R30,R14
+        LDM R26,=CPMKBUF
+        ADM R26,R14
+        LDB R20,=9D        ! length of "CREATING "
+CPBPF   POBD R22,+R30
+        PUBD R22,+R26
+        DCB R20
+        JNZ CPBPF
+        LDMD R30,X14,CPNMADR
+        LDMD R32,X14,CPNMLEN
+        LDM R36,=12D,0   ! 9 prefix + 3 dots
+        ADM R36,R32       ! plus validated filename length
+CPBNAM  POBD R22,+R30
+        PUBD R22,+R26
+        DCM R32
+        JNZ CPBNAM
+        LDB R22,=56      ! octal ASCII period '.'
+        PUBD R22,+R26
+        PUBD R22,+R26
+        PUBD R22,+R26
+        LDM R26,=CPMKBUF
+        ADM R26,R14
+        JSB =OUTSTR       ! native CRT output, including newline
         RTN
 
 ! A fresh BASIC statement always starts with an empty command mailbox.
@@ -422,7 +459,10 @@ CPWAIT  LDBD R20,=CPSTATE
 ! boundary. R56-R57 is EXACTLY two bytes; R50-R57 is EIGHT bytes.
 ! =0,3 loads 0x0300 = 768, not =3,0 which loads 3.
 ! Save only this 2-byte register pair across OUTSTR.
-CPREAD  LDM R56,=0,3       ! exactly 768 reply bytes maximum
+CPREAD  LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,CPENDNL
+        LDM R56,=0,3       ! exactly 768 reply bytes maximum
 CPRLOOP LDBD R32,=CPRPLY
         CMB R32,=0
         JZR CPDONE
@@ -431,6 +471,9 @@ CPRLOOP LDBD R32,=CPRPLY
         CMB R32,=13D      ! ASCII CR, ignored
         JZR CPNEXT
         JSB =OUTCHR       ! Proven v0.03b printable-character path
+        LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,CPENDNL
         JMP CPNEXT
 
 CPNEWLN LDMD R14,=BINTAB
@@ -440,6 +483,8 @@ CPNEWLN LDMD R14,=BINTAB
         LDM R36,=1D,0
         JSB =OUTSTR       ! One trailing space plus native CRT newline
         LDMD R14,=BINTAB
+        LDB R20,=1
+        STBD R20,X14,CPENDNL
         LDMD R56,X14,CPRBUD
 CPNEXT  DCM R56
         JNZ CPRLOOP
@@ -448,12 +493,24 @@ CPNEXT  DCM R56
         LDM R26,=CPRLONG
         ADMD R26,=BINTAB
         LDM R36,=18D,0
-        JSB =OUTSTR
-CPDONE  RTN
+        JSB =OUTSTR       ! native newline already printed
+        RTN
+! Some result strings end with LF and others do not. Leave exactly
+! one fresh BASIC input line after a reply, not an extra blank line.
+CPDONE  LDMD R14,=BINTAB
+        LDBD R20,X14,CPENDNL
+        CMB R20,=1
+        JZR CPFIN
+        LDM R26,=CPSPACE
+        ADM R26,R14
+        LDM R36,=1D,0
+        JSB =OUTSTR       ! native HP-85 CRT newline
+CPFIN   RTN
 
 CPTOUT  ASP "CPM85 DRIVE TIMEOUT"
 CPRLONG ASP "CPM85 REPLY LIMIT"
 CPSPACE BYT 40         ! octal ASCII space, one byte for OUTSTR newline
+CPMKPFX ASP "CREATING "
 
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
 ! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
@@ -521,13 +578,17 @@ KHSAVE  BSZ 7
 KCOUNT  BSZ 1
 KLAST   BSZ 1
 CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
+CPENDNL BSZ 1           ! was last output byte an HP-native newline?
+CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
+CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
+CPMKBUF BSZ 96          ! 9+79+3 maximum, OUTSTR does not need NUL
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.04a DISK CONTROL"
+VERMSG   ASP "CPM85 0.04b DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
