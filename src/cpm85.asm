@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.03f -- HP-85 KEYBOARD + CP/M DRIVE CONTROL
+! CPM85 v0.04a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -19,6 +19,8 @@
 !       CPDMNT "B:","WORK.DSK"  ! pending mount, relative to /cpm/disks
 !       CPDUMNT "B:" ! pending unmount
 !       CPRESET       ! activate desired mounts by Z80-only reset
+!       CPDIMGS      ! list .DSK images in /cpm/disks
+!       CPDMK "WORK.DSK" ! create fresh 8 MiB disk on Teensy SD
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -63,6 +65,8 @@ PARSE   BYT 0,0
         DEF TWOSTR    ! CPDMNT
         DEF ONESTR    ! CPDUMNT
         DEF NOPARS    ! CPRESET
+        DEF NOPARS    ! CPDIMGS
+        DEF ONESTR    ! CPDMK
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -74,6 +78,8 @@ RUNTIM  BYT 0,0
         DEF CPDMNT
         DEF CPUMNT
         DEF CPRESE
+        DEF CPIMGS
+        DEF CPMAKE
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -85,6 +91,8 @@ ASCIIS  ASP "CPM"
         ASP "CPDMNT"
         ASP "CPDUMNT"
         ASP "CPRESET"
+        ASP "CPDIMGS"
+        ASP "CPDMK"
 
 ERMSG   BYT 377
 
@@ -261,7 +269,7 @@ LSTFUN  BIN
 !
 ! CPSTATUS: no arguments
 ! CPRESET: explicitly resets ONLY Z80 (operator must be at CP/M prompt).
-! CPDMNT / CPDUMNT: BASIC string expressions, not numeric parameters.
+! CPDMNT / CPDUMNT / CPDMK: BASIC string expressions, not numeric parameters.
 ! ----------------------------------------------------------------------
 
         BYT 241
@@ -315,6 +323,27 @@ CPDMNT  BIN
         JSB X14,CPGO
         RTN
 
+! CPDIMGS and CPDMK reuse the proven command mailbox with opcodes 5/6.
+! CPDMK waits longer for the Teensy to finish writing its SD image.
+        BYT 241
+CPIMGS  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        LDB R22,=5
+        JSB X14,CPGO
+        RTN
+
+        BYT 241
+CPMAKE  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        POMD R30,-R12     ! file-name string address, exactly 2 bytes
+        POMD R32,-R12     ! file-name length, exactly 2 bytes
+        JSB X14,CPWRIM
+        LDB R22,=6
+        JSB X14,CPGO
+        RTN
+
 ! A fresh BASIC statement always starts with an empty command mailbox.
 ! 0 resets a previous timed-out or rejected partial command.
 CPCLR   CLB R20
@@ -360,6 +389,9 @@ CPBAD   JSB =ERRORP
 CPGO    BIN
         STBD R22,=CPOPC
         LDM R36,=8D,0
+        CMB R22,=6
+        JNZ CPWTOP
+        LDM R36,=250D,0  ! only CPDMK gets a longer bounded wait
 CPWTOP  LDM R56,=177,377  ! 16-bit polling counter, not 64-bit R50
 CPWAIT  LDBD R20,=CPSTATE
         CMB R20,=2
@@ -495,7 +527,7 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
-VERMSG   ASP "CPM85 0.03f DISK CONTROL"
+VERMSG   ASP "CPM85 0.04a DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
