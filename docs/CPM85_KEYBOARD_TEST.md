@@ -1,5 +1,9 @@
 # CPM85 v0.02a — HP-85 keyboard forwarding experiment
 
+## 2026-10-22 — CPM85 v0.04b HP BASIC output-line consistency (CI validated, hardware test pending)
+
+User successfully exercised `CPDIMGS` and `CPDMK` (v0.04a), then requested that every command leave HP BASIC on a fresh line so pressing ENDLINE does not reinterpret the previous response (ERROR 92). v0.04b uses the existing native `OUTSTR` HP CRT newline semantics for all statement outputs: CPM (initial attach, already-attached case, hook-busy case), CPOFF, CPVER, CPSTATUS, CPDMNT, CPDUMNT, CPRESET, CPDIMGS, CPDMK. The common command reply renderer tracks whether its final emitted character is already a native line feed; it emits one if needed, avoiding duplicate blank lines. The CPDMK banner `CREATING <imgname>...` is displayed before the creation wait; an existing filename or SD error still gets the usual final error message on its own line. Timeout and response-too-long paths already used `OUTSTR` and remain so. `CPCOUNT` and `CPLAST` are numeric BASIC functions and return values without emitting CRT output. Keyboard CHIDLE/K8 hook unchanged. CAPASM uses `CPMKBUF BSZ 96D` (decimal; bare 96 is illegal octal). Automated test audits all nine statement paths and CAPASM/CAPLIF packaging. Must test on actual HP-85 before merging draft PRs to main.
+
 ## CPM85 v0.02a — end-to-end hardware validation (2026-10-19)
 
 **PASSED.** The user confirms the complete development setup works on a physical HP-85: `CPM` redirects keystrokes into CP/M, K8 releases the keyboard back to BASIC while CP/M keeps running, and entering `CPM` again reconnects to that existing CP/M session. This extends the previously proven v0.01b keyboard hook/diagnostic tests to real Teensy→ESP32 forwarding. No firmware or ROM `main` branch has been merged; this is a successful functional checkpoint on the development branches.
