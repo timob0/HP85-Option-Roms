@@ -165,7 +165,7 @@ CPMRUN  SAD
         LDMD R14,=BINTAB
         LDBD R20,X14,KHACT
         CMB R20,=0
-        JNZ CPMRET
+        JNZ CPALRD
 
         LDBD R20,=CHIDLE
         CMB R20,=236
@@ -202,6 +202,14 @@ CPSAVE  POBD R22,+R34
 ! to the matching EBTKS development firmware; a missing Teensy
 ! handler must never prevent local K8 release.
         STBD R20,=CPCTL
+        JMP CPMRET
+
+! Even if CPM is invoked while already attached, terminate the BASIC
+! statement on a clean line. No keyboard hook or transport state changes.
+CPALRD  LDM R26,=ALRMSG
+        ADMD R26,=BINTAB
+        LDM R36,=24D,0
+        JSB =OUTSTR
         JMP CPMRET
 
 CPBUSY  LDM R26,=BSYMSG
@@ -581,13 +589,14 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
-CPMKBUF BSZ 96          ! 9+79+3 maximum, OUTSTR does not need NUL
+CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
+ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
 VERMSG   ASP "CPM85 0.04b DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
