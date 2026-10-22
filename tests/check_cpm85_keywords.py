@@ -64,7 +64,7 @@ print("PASS: CPM85 CP/M drive-control ABI and string parsers")
 # HP CRT OUTCHR renders raw control bytes as graphics. Use the proven
 # byte-by-byte printable-char path, and OUTSTR only for actual CRT newline.
 # ASCII 10D is LF and 13D is CR; 12D and 15D were wrong (decimal!).
-reply = text.split("CPREAD  LDM R56,=0,3", 1)[1].split("CPTOUT  ASP", 1)[0]
+reply = text.split("CPREAD  LDMD R14,=BINTAB", 1)[1].split("CPTOUT  ASP", 1)[0]
 assert "CPRLOOP LDBD R32,=CPRPLY" in reply
 assert "CMB R32,=10D" in reply
 assert "CMB R32,=13D" in reply
