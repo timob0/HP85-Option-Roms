@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -54,10 +54,10 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.03f DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.04a DISK CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
-for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE"):
+for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE"):
     assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
 print("PASS: CPM85 CP/M drive-control ABI and string parsers")
 
@@ -85,3 +85,14 @@ assert "CPSPACE BYT 40" in text
 assert "CPBUF   BSZ" not in text
 assert "CPPRINT BIN" not in text
 print("PASS: CPM85 v0.03e correct ASCII LF/CR and 2-byte reply counter")
+
+# New CPDIMGS / CPDMK must preserve the same bounded, HP BASIC ABI.
+image_list = text.split("CPIMGS  BIN", 1)[1].split("CPMAKE  BIN", 1)[0]
+image_create = text.split("CPMAKE  BIN", 1)[1].split("CPCLR   CLB", 1)[0]
+assert "LDB R22,=5" in image_list and "JSB X14,CPGO" in image_list
+assert "POMD R30,-R12" in image_create and "POMD R32,-R12" in image_create
+assert "JSB X14,CPWRIM" in image_create and "LDB R22,=6" in image_create
+assert "LDM R36,=250D,0" in text
+assert "CMB R22,=6" in text
+assert "CMB R22,=207" not in image_create
+print("PASS: HP CPM85 image-command ABI, string pair width, and bounded timeout")
