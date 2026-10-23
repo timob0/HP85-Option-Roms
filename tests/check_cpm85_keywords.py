@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -54,10 +54,10 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.04b DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.04c DISK CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
-for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE"):
+for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE", "CPCAT"):
     assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
 print("PASS: CPM85 CP/M drive-control ABI and string parsers")
 
@@ -95,7 +95,11 @@ assert "JSB X14,CPWRIM" in image_create and "LDB R22,=6" in image_create
 assert "LDM R36,=250D,0" in text
 assert "CMB R22,=6" in text
 assert "CMB R22,=207" not in image_create
-print("PASS: HP CPM85 image-command ABI, string pair width, and bounded timeout")
+catalog = text.split("CPCAT   BIN", 1)[1].split("CPBANN  BIN", 1)[0]
+assert "POMD R30,-R12" in catalog and "POMD R32,-R12" in catalog
+assert catalog.index("JSB X14,CPWRDR") < catalog.index("LDB R22,=7") < catalog.index("JSB X14,CPGO")
+assert "CMB R22,=7" in text
+print("PASS: HP CPM85 image and CPDCAT command ABI, string pair width, bounded timeout")
 
 # HP must display CPDMK's filename before the long wait using the native
 # OUTSTR path, never by interpreting raw LF as an OUTCHR glyph.
@@ -139,7 +143,8 @@ for start,end in (("OFFRUN  SAD", "VERRUN  LDM"),
 
 # These six HP BASIC statements have no independent print paths: each must
 # reach CPGO, which handles success, error, timeout and reply-limit newlines.
-for start,end in (("CPSTAT  BIN","CPRESE  BIN"),
+for start,end in (("CPCAT   BIN","CPBANN  BIN"),
+                  ("CPSTAT  BIN","CPRESE  BIN"),
                   ("CPRESE  BIN","CPUMNT  BIN"),
                   ("CPUMNT  BIN","CPDMNT  BIN"),
                   ("CPDMNT  BIN","CPIMGS  BIN"),
@@ -158,4 +163,4 @@ assert "CPDONE  LDMD" in transport and "JZR CPFIN" in transport
 for start,end in (("CNTFUN  BIN","LSTFUN  BIN"),
                   ("LSTFUN  BIN","CPSTAT  BIN")):
     assert "JSB =OUTSTR" not in text.split(start,1)[1].split(end,1)[0]
-print("PASS: all nine CPM85 statements leave a fresh HP BASIC input line; numeric functions unchanged")
+print("PASS: all ten CPM85 statements leave a fresh HP BASIC input line; numeric functions unchanged")
