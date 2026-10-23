@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.04b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
+! CPM85 v0.04c -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -21,6 +21,7 @@
 !       CPRESET       ! activate desired mounts by Z80-only reset
 !       CPDIMGS      ! list .DSK images in /cpm/disks
 !       CPDMK "WORK.DSK" ! create fresh 8 MiB disk on Teensy SD
+!       CPDCAT "A:"     ! read-only native BDOS directory catalog
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -67,6 +68,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPRESET
         DEF NOPARS    ! CPDIMGS
         DEF ONESTR    ! CPDMK
+        DEF ONESTR    ! CPDCAT
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -80,6 +82,7 @@ RUNTIM  BYT 0,0
         DEF CPRESE
         DEF CPIMGS
         DEF CPMAKE
+        DEF CPCAT
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -93,6 +96,7 @@ ASCIIS  ASP "CPM"
         ASP "CPRESET"
         ASP "CPDIMGS"
         ASP "CPDMK"
+        ASP "CPDCAT"
 
 ERMSG   BYT 377
 
@@ -357,6 +361,21 @@ CPMAKE  BIN
         JSB X14,CPGO
         RTN
 
+! CPDCAT "A:" uses the established HP->Teensy->ESP mailbox.
+! The ESP32 safely finishes BDOS 10 with a synthetic blank Return
+! only while the native CCP command line is verified empty; HP never
+! injects a keyboard key. This command requires Teensy/ESP opcode 7.
+        BYT 241
+CPCAT   BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        POMD R30,-R12     ! drive expression character address
+        POMD R32,-R12     ! drive expression character length
+        JSB X14,CPWRDR
+        LDB R22,=7
+        JSB X14,CPGO
+        RTN
+
 ! CPDMK start banner: compose CREATING <name>... in a bounded HP
 ! LOADBIN buffer and print once through native OUTSTR. OUTSTR finishes
 ! the CRT line, so the name is visible before the long CPDMK wait.
@@ -435,8 +454,10 @@ CPGO    BIN
         STBD R22,=CPOPC
         LDM R36,=8D,0
         CMB R22,=6
+        JZR CPLONG
+        CMB R22,=7
         JNZ CPWTOP
-        LDM R36,=250D,0  ! only CPDMK gets a longer bounded wait
+CPLONG  LDM R36,=250D,0  ! CPDMK and CPDCAT are bounded async services
 CPWTOP  LDM R56,=177,377  ! 16-bit polling counter, not 64-bit R50
 CPWAIT  LDBD R20,=CPSTATE
         CMB R20,=2
