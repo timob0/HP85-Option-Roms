@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.05b EXPERIMENTAL -- C2 bounded native keyboard test alongside CPUI
+! CPM85 v0.05c -- C2 unsafe native keyboard experiment disabled after HP crash
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -24,9 +24,9 @@
 !       CPDCAT "A:"     ! read-only native BDOS directory catalog
 !       CPUI 0          ! native C1 console state + CRT, BASIC key pump
 !       CPUI K          ! deliver raw keyboard code from KBDKEY (C1 probe)
-!       CPKTEST         ! C2 BOUNDED native KEYHIT foreground probe
-!       CPKCOUNT        ! observed KEYHIT changes during last probe
-!       CPKLAST         ! last distinct KEYHIT value during last probe
+!       CPKTEST         ! DISABLED safe return after C2 hardware crash
+!       CPKCOUNT        ! compatibility diagnostic (0 in quarantined C2)
+!       CPKLAST         ! compatibility diagnostic (0 in quarantined C2)
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -739,162 +739,36 @@ UIRET   BIN
         RTN
 
 ! ----------------------------------------------------------------------
-! C2 Native KEYHIT foreground experiment.
+! Stage C2 unsafe input experiment QUARANTINED after hardware crash.
 !
-! This TEST is bounded and will return to BASIC on K8 or timeout.
-! KEYHIT is known to contain the event code when CHIDLE runs; it is
-! NOT YET KNOWN if it changes while a native foreground runtime spins.
-! Only physical hardware can settle this. No busy ISR, no EBTKS I/O,
-! no HP printer output. Duplicate identical codes MAY be missed.
+! 2026-10-24: physical HP-85 crashed when CPKTEST was invoked.
+! Original C2 probe is preserved in Git history (commit 7c7d9cd3);
+! do not run it. Its local JSB =K2KEY was an invalid relocatable
+! routine call (should use JSB X14,K2KEY). More fundamentally,
+! the KEYHIT-only busy loop was never proven to get keyboard events
+! while normal HP BASIC execution was suspended.
 !
-! Never call UI's BASIC key-pump from here: this probe is purely native.
+! CPKTEST now returns immediately after an OUTSTR notice. No native
+! foreground loop, KEYHIT read, CHIDLE changes or EBTKS I/O.
+! Retain only the zero-argument numeric diagnostics for source ABI
+! compatibility: both remain zero after initial LOADBIN/CPKTEST.
+! The validated C1 CPUI + BASIC key-pump path stays untouched.
 ! ----------------------------------------------------------------------
         BYT 241
 K2RUN   SAD
         BIN
         LDMD R14,=BINTAB
-        LDBD R20,X14,KHACT
-        CMB R20,=0
-        JZR K2OK1
-        JSB =ERRORP
-        BYT 89D
-K2OK1   LDBD R20,=CHIDLE
-        CMB R20,=236
-        JZR K2OK2
-        JSB =ERRORP
-        BYT 89D
-
-K2OK2   LDMD R14,=BINTAB
-        LDBD R20,X14,UIACT
-        CMB R20,=0
-        JZR K2OPEN
-        JSB =ERRORP
-        BYT 89D
-K2OPEN  CLB R20
+        CLB R20
         STBD R20,X14,K2COUNT
         STBD R20,X14,K2LAST
-        STBD R20,X14,K2MODE
-        LDB R20,=1
-        STBD R20,X14,K2PAGE
-        LDBD R20,=KEYHIT
-        STBD R20,X14,K2PREV
-        LDM R26,=K2START
-        ADMD R26,=BINTAB
-        LDM R36,=26D,0
-        JSB =OUTSTR
-        BIN
-        LDMD R14,=BINTAB
-        JSB X14,K2DRAW
-
-! Each window is finite: three full 16-bit counts. Redraw/key events
-! restart a new window. A silent KEYHIT fails safe with a timeout.
-K2ARM   LDM R36,=3D,0
-K2RELD  LDM R56,=377,377
-K2POLL  LDBD R22,=KEYHIT
-        LDMD R14,=BINTAB
-        LDBD R20,X14,K2PREV
-        CMB R22,R20
-        JNZ K2SEEN
-        DCM R56
-        JNZ K2POLL
-        DCM R36
-        JNZ K2RELD
-        LDM R26,=K2TOUT
-        ADMD R26,=BINTAB
-        LDM R36,=26D,0
-        JSB =OUTSTR
-        BIN
-        JMP K2END
-
-! Capture a change and dispatch through a short, non-ISR subroutine.
-K2SEEN  STBD R22,X14,K2PREV
-        STBD R22,X14,K2LAST
-        LDBD R20,X14,K2COUNT
-        ICB R20
-        STBD R20,X14,K2COUNT
-        CMB R22,=207
-        JNZ K2OTHER
-        LDM R26,=K2BYE
-        ADMD R26,=BINTAB
-        LDM R36,=18D,0
-        JSB =OUTSTR
-        BIN
-        JMP K2END
-K2OTHER JSB =K2KEY
-        JMP K2ARM
-
-K2END   BIN
-        PAD
-        RTN
-
-! K1..K3 set page, K4 toggles Control/Management simulation.
-! Unknown keys are recorded but not forwarded. No printer receiver.
-K2KEY   LDMD R14,=BINTAB
-        CMB R22,=203
-        JNZ K2MENU
-        LDBD R20,X14,K2MODE
-        CMB R20,=0
-        JZR K2TOCP
-        CLB R20
-        STBD R20,X14,K2MODE
-        JMP K2DRAW
-K2TOCP  LDB R20,=1
-        STBD R20,X14,K2MODE
-        JMP K2DRAW
-K2MENU  LDBD R20,X14,K2MODE
-        CMB R20,=0
-        JZR K2MKEY
-        RTN
-K2MKEY  CMB R22,=200
-        JNZ K2K2
-        LDB R20,=1
-        JMP K2SAVE
-K2K2    CMB R22,=201
-        JNZ K2K3
-        LDB R20,=2
-        JMP K2SAVE
-K2K3    CMB R22,=202
-        JZR K2SET3
-        RTN
-K2SET3  LDB R20,=3
-K2SAVE  STBD R20,X14,K2PAGE
-        JMP K2DRAW
-
-K2DRAW  LDMD R14,=BINTAB
-        LDBD R20,X14,K2MODE
-        CMB R20,=0
-        JZR K2DUI
-        LDM R26,=K2CTRL
+        LDM R26,=K2STOP
         ADMD R26,=BINTAB
         LDM R36,=29D,0
         JSB =OUTSTR
         BIN
-        RTN
-K2DUI   LDBD R20,X14,K2PAGE
-        CMB R20,=1
-        JZR K2D1
-        CMB R20,=2
-        JZR K2D2
-        LDM R26,=K2SYSM
-        ADMD R26,=BINTAB
-        LDM R36,=21D,0
-        JSB =OUTSTR
-        BIN
-        RTN
-K2D1    LDM R26,=K2DRIV
-        ADMD R26,=BINTAB
-        LDM R36,=21D,0
-        JSB =OUTSTR
-        BIN
-        RTN
-K2D2    LDM R26,=K2DEVC
-        ADMD R26,=BINTAB
-        LDM R36,=22D,0
-        JSB =OUTSTR
-        BIN
+        PAD
         RTN
 
-! C2 numeric diagnostics, isolated from CPCOUNT/CPLAST and legacy KHOOK.
         BYT 0,55
 K2CNT   BIN
         LDMD R14,=BINTAB
@@ -989,21 +863,12 @@ UIREAL  BSZ 8D          ! temporary BASIC real, ONER/CONINT conversion
 UIACT   BSZ 1           ! native C1 console initialized
 UIMODE  BSZ 1           ! 0=management,1=simulated CP/M control
 UIPAGE  BSZ 1           ! 1=drives,2=devices,3=system
-K2COUNT BSZ 1           ! C2 observed distinct-event counter (modulo 256)
-K2LAST  BSZ 1           ! C2 last observed event code
-K2PREV  BSZ 1           ! previous KEYHIT sample, avoid stale held event
-K2MODE  BSZ 1           ! experimental 0=Management, 1=Control
-K2PAGE  BSZ 1           ! experimental 1=Drives, 2=Devices, 3=System
+K2COUNT BSZ 1           ! quarantined probe count, 0
+K2LAST  BSZ 1           ! quarantined probe last code, 0
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
-K2START ASP "C2 RAW KEYHIT PROBE ACTIVE"
-K2TOUT  ASP "C2 TIMEOUT - BACK TO BASIC"
-K2BYE   ASP "C2 K8 - BACK BASIC"
-K2CTRL  ASP "CONTROL DEMO - NO KEY FORWARD"
-K2SYSM  ASP "C2 SYSTEM: K1-3 K4 K8"
-K2DRIV  ASP "C2 DRIVES: K1-3 K4 K8"
-K2DEVC  ASP "C2 DEVICES: K1-3 K4 K8"
+K2STOP  ASP "CPKTEST DISABLED - SEE C2 DOC"
 UITITLE ASP "CPM85 CONSOLE C1 (NATIVE)"
 UIMENU  ASP "K1-3 PAGES K4 CPM K8 EXIT"
 UIDRIVE ASP "DRIVES: NOT CONNECTED (C1)"
@@ -1016,11 +881,11 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.05b NATIVE KEY PROBE"
+VERMSG   ASP "CPM85 0.05c C2 DISABLED"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
-VERLEN  EQU 28D
+VERLEN  EQU 23D
 
 ! HP-85 addresses, all OCTAL (copied from tested PRINTER85 LOADBIN).
 BINTAB  DAD 101233
