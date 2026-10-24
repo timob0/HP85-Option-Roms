@@ -35,6 +35,14 @@ assert 'ASP "CPUI"' in asm and 'ASP "CPM"' in asm
 assert "KHOOK   BIN" in asm and "CPMRUN  SAD" in asm
 assert "UIDRAW  " in asm and "UIRUN   SAD" in asm
 
+# Crash-prevention guard for the exact offending instruction class:
+# JSB =LABEL jumps through an absolute address cell (DAD), and must never
+# be used for a relocated LOADBIN code label (which needs JSB X14,LABEL).
+targets=set(re.findall(r"\bJSB =([A-Za-z0-9+.$-]+)",asm))
+address_cells=set(re.findall(r"^([A-Za-z0-9+.$-]+)\s+DAD\b",asm,re.M))
+non_cell_calls=targets-address_cells
+assert not non_cell_calls, ("Unsafe indirect JSB to non-DAD source label",sorted(non_cell_calls))
+
 lit=re.search(r'K2STOP\s+ASP "([^"]+)"',asm).group(1)
 count=re.search(r'LDM R26,=K2STOP\n\s+ADMD R26,=BINTAB\n\s+LDM R36,=(\d+)D,0',disabled)
 assert count and len(lit)==int(count.group(1))
