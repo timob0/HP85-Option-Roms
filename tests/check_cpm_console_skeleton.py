@@ -35,7 +35,13 @@ assert "GOSUB 500" in src
 assert "CP/M DEMO: K4 MENU K8 EXIT" in src
 assert "DISPLAY ONLY - NEVER USES PRINTER IS" in src
 # Future transport must be implemented only after physical console validation.
-assert not re.search(r"\b(?:CPM\s*$|CPCTL|CPKEY|POKE|OUTPUT|PRINT\s+#)\b", src, re.M)
+# No HP peripheral writes or PRINT/PRINTER IS changes from executable lines.
+# PRINT is NOT screen-only on HP-85: it follows PRINTER IS and might print.
+executable = "\\n".join(statement for statement in index.values()
+                       if not statement.startswith("REM "))
+assert not re.search(r"\\b(?:CPCTL|CPKEY|POKE|OUTPUT|PRINT|PRINTER IS)\\b",
+                     executable, re.M)
+
 
 # No 32-column CRT line should wrap. DISP avoids HP BASIC PRINT, which\n# follows PRINTER IS and could send test-menu bytes to an HP-IB device.
 for line, statement in index.items():
