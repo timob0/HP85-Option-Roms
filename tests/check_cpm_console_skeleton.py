@@ -32,15 +32,15 @@ assert index[130] == "IF K=135 THEN 400"
 assert index[140] == "IF K=131 THEN 300"
 assert index[150] == "IF M=1 THEN 110"
 assert "GOSUB 500" in src
-assert "LST: NOT READY" in src
-assert "KEYS ARE NOT FORWARDED" in src
+assert "CP/M DEMO: K4 MENU K8 EXIT" in src
+assert "DISPLAY ONLY - NEVER USES PRINTER IS" in src
 # Future transport must be implemented only after physical console validation.
 assert not re.search(r"\b(?:CPM\s*$|CPCTL|CPKEY|POKE|OUTPUT|PRINT\s+#)\b", src, re.M)
 
-# No 32-column alpha row should wrap (unconditional PRINT of static text).
+# No 32-column CRT line should wrap. DISP avoids HP BASIC PRINT, which\n# follows PRINTER IS and could send test-menu bytes to an HP-IB device.
 for line, statement in index.items():
-    m = re.fullmatch(r'PRINT "([^"]*)"', statement)
+    m = re.fullmatch(r'DISP "([^"]*)"', statement)
     if m:
-        assert len(m.group(1)) <= 30, (line, len(m.group(1)), m.group(1))
+        assert len(m.group(1)) <= 32, (line, len(m.group(1)), m.group(1))
 
-print("PASS: CPM85 foreground BASIC skeleton, modes, key routing guard, cleanup and 30-col CRT")
+print("PASS: CPM85 foreground BASIC skeleton, modes, keys, safe CRT DISP and cleanup")
