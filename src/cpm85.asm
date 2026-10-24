@@ -782,6 +782,7 @@ K2OPEN  CLB R20
         ADMD R26,=BINTAB
         LDM R36,=26D,0
         JSB =OUTSTR
+        BIN
         LDMD R14,=BINTAB
         JSB X14,K2DRAW
 
@@ -802,6 +803,7 @@ K2POLL  LDBD R22,=KEYHIT
         ADMD R26,=BINTAB
         LDM R36,=26D,0
         JSB =OUTSTR
+        BIN
         JMP K2END
 
 ! Capture a change and dispatch through a short, non-ISR subroutine.
@@ -816,6 +818,7 @@ K2SEEN  STBD R22,X14,K2PREV
         ADMD R26,=BINTAB
         LDM R36,=18D,0
         JSB =OUTSTR
+        BIN
         JMP K2END
 K2OTHER JSB =K2KEY
         JMP K2ARM
@@ -865,6 +868,7 @@ K2DRAW  LDMD R14,=BINTAB
         ADMD R26,=BINTAB
         LDM R36,=29D,0
         JSB =OUTSTR
+        BIN
         RTN
 K2DUI   LDBD R20,X14,K2PAGE
         CMB R20,=1
@@ -875,16 +879,19 @@ K2DUI   LDBD R20,X14,K2PAGE
         ADMD R26,=BINTAB
         LDM R36,=21D,0
         JSB =OUTSTR
+        BIN
         RTN
 K2D1    LDM R26,=K2DRIV
         ADMD R26,=BINTAB
         LDM R36,=21D,0
         JSB =OUTSTR
+        BIN
         RTN
 K2D2    LDM R26,=K2DEVC
         ADMD R26,=BINTAB
         LDM R36,=22D,0
         JSB =OUTSTR
+        BIN
         RTN
 
 ! C2 numeric diagnostics, isolated from CPCOUNT/CPLAST and legacy KHOOK.
