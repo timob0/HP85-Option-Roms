@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT", "CPUI"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -54,7 +54,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.04c DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.05a CONSOLE PROBE"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -164,3 +164,42 @@ for start,end in (("CNTFUN  BIN","LSTFUN  BIN"),
                   ("LSTFUN  BIN","CPSTAT  BIN")):
     assert "JSB =OUTSTR" not in text.split(start,1)[1].split(end,1)[0]
 print("PASS: all ten CPM85 statements leave a fresh HP BASIC input line; numeric functions unchanged")
+
+
+# C1 is a deliberately isolated native UI/state implementation, not a
+# replacement for the physically proven CPM CHIDLE keyboard capture.
+assert "DEF UIKPAR" in text and "DEF UIRUN" in text
+assert 'ASP "CPUI"' in text
+assert "UIKPAR  PUBD R43,+R6" in text
+assert "JSB =NUMVP" in text
+native_ui = text.split("UIRUN   SAD",1)[1].split("! KREL: restore",1)[0]
+assert "JSB =ONER" in native_ui and "JSB =CONINT" in native_ui
+assert "STMD R#,X14,UIREAL" in native_ui
+assert "LDB R20,R77" in native_ui
+assert "UIINIT" in native_ui and "UISWCH" in native_ui and "UIEXIT" in native_ui
+assert "UIACT" in native_ui and "UIMODE" in native_ui and "UIPAGE" in native_ui
+assert "CMB R22,=207" in native_ui and "CMB R22,=203" in native_ui
+for key in ("200","201","202"):
+    assert "CMB R22,="+key in native_ui
+assert "LDBD R20,=CHIDLE" in native_ui  # no simultaneous printer hook
+assert "STBD R20,=CPCTL" not in native_ui
+assert "STBD R22,=CPKEY" not in native_ui
+assert "JSB =OUTSTR" in native_ui
+assert "JSB =OUTCHR" not in native_ui
+assert "UIREAL  BSZ 8D" in text
+for name in ("UIACT","UIMODE","UIPAGE"):
+    assert name+"   BSZ 1" in text or name+"  BSZ 1" in text
+# Regression against the literal-length error: every native OUTSTR
+# display block must transmit exactly the bytes in its ASP message.
+pairs = __import__("re").findall(
+    r"LDM R26,=(UI[A-Z]+)\\n\\s+ADMD R26,=BINTAB\\n\\s+LDM R36,=(\\d+)D,0",
+    native_ui)
+assert len(pairs)==8, pairs
+for name, n in pairs:
+    m = __import__("re").search(r"^"+name+r"\\s+ASP \\"([^\\"]+)\\"",
+                                text,__import__("re").M)
+    assert m and int(n)==len(m.group(1)), (name,n,m.group(1) if m else None)
+assert "NUMVP   DAD 12407" in text
+assert "ONER    DAD 56215" in text
+assert "CONINT  DAD 44321" in text
+print("PASS: C1 isolated native CPUI keycode, mode, CRT, lengths and legacy CPM safety")
