@@ -38,7 +38,8 @@ assert "UIDRAW  " in asm and "UIRUN   SAD" in asm
 # Crash-prevention guard for the exact offending instruction class:
 # JSB =LABEL jumps through an absolute address cell (DAD), and must never
 # be used for a relocated LOADBIN code label (which needs JSB X14,LABEL).
-targets=set(re.findall(r"\bJSB =([A-Za-z0-9+.$-]+)",asm))
+instruction_lines="\n".join(line.split("!",1)[0] for line in asm.splitlines())
+targets=set(re.findall(r"\bJSB =([A-Za-z0-9+.$-]+)",instruction_lines))
 address_cells=set(re.findall(r"^([A-Za-z0-9+.$-]+)\s+DAD\b",asm,re.M))
 non_cell_calls=targets-address_cells
 assert not non_cell_calls, ("Unsafe indirect JSB to non-DAD source label",sorted(non_cell_calls))
