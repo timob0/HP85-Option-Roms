@@ -1,7 +1,24 @@
 # CPM85 Stage C1 — native HP-85 CRT/mode command with BASIC key pump
 
-**Status:** experimental, not yet accepted on physical HP-85. Feature
-branch `feature/cpm85-hpib-output`. No ESP32 or Teensy firmware change.
+**Status (2026-10-24): C1 PHYSICAL HP-85 ACCEPTANCE PASSED.**
+The user built and tested this C1 native `CPUI` + BASIC key-pump
+prototype and confirmed **"Tested and works."** The C1 console
+integration is physically accepted: native page drawing/state changes,
+key-driven Management/Control simulation and normal K8 exit via
+`tests/CPMCONSOLE_C1.bas`. Latest source/CI prior to test:
+`d2a02e9a6ebe78b0e67fb6b3c5c0a681b7caf201`,
+GitHub Actions run `40133163983` passed.
+Feature branch `feature/cpm85-hpib-output`; **all main branches untouched**.
+No ESP32 or Teensy firmware modification in C1.
+
+**Boundary of this acceptance:** This validates the hybrid C1 console,
+NOT a fully native HP keyboard polling loop, live CP/M keyboard forwarding
+inside `CPUI`, printer receiver, real `LST:` routing or `LISTST` readiness.
+The existing `CPM` command remains the separate previously
+hardware-accepted keyboard-forwarding implementation. Next Stage C2
+should establish and verify native foreground key acquisition (or a
+well-defined equivalent event entry), preserving K8 exit and HP BASIC
+environment on completion.
 
 ## Why the C1 input path is deliberately hybrid
 
