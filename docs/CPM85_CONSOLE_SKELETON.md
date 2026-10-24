@@ -1,7 +1,14 @@
 # CPM85 management console — Stage C0 hardware input/UI probe
 
-**Status (2026-10-24): prototype source added, CI static validation and
-CAPASM build only; not hardware tested.** File: `tests/CPMCONSOLE.bas`.
+**Status (2026-10-24): STAGE C0 PHYSICAL HP-85 ACCEPTANCE PASSED.**
+User tested `tests/CPMCONSOLE.bas` on the physical machine and confirmed
+**"yes, that works."** The foreground BASIC loop, display-only menu,
+K1-K3 page controls, K4 UI/simulated-Control mode toggle, and K8
+return/keyboard cleanup are accepted as a group. CI passed on the
+HP feature branch. This validation is limited to the standalone BASIC
+prototype: there is **no native LOADBIN foreground loop, printer
+receiver, LST: interception, or live keyboard forwarding in this test**.
+The previously validated CPM85 v0.04c LOADBIN remains untouched.
 
 ## Why a standalone BASIC skeleton first
 
