@@ -6,15 +6,74 @@ instructions below as **historical and unsafe**; do not repeat them.
 The prior successful GitHub Actions tests only covered assembly and
 static source checks, not safe operation on hardware.
 
+## Additional physical crash observations (2026-10-24)
+
+The user clarified the on-machine sequence:
+
+- Executing `CPKTEST` **successfully printed the initial heading**.
+- **None of the keyboard inputs was recognized**; no page/mode
+  changes or K8 exit were visible.
+- After a short interval, the machine switched to a **blank CRT with
+  a cursor**, visually similar to what happens after pressing RESET.
+
+This shifts the working diagnosis: the native LOADBIN command could
+enter the foreground routine and invoke `OUTSTR`, but the polling
+loop did not visibly receive usable keyboard events. The hypothesis
+that the HP keyboard event service does not update `KEYHIT` while
+BASIC's normal keyboard/input loop is not running is **supported by
+these observations but not formally established**. No actual
+watchdog or hardware-reset reason was captured; the reset-like
+screen could have another cause, including corrupt return/runtime
+state when the bounded software counter completed.
+
+**Prior root-cause ranking amended:** `JSB =K2KEY` was indisputably
+an unsafe indirect call to a relocated code label, but this particular
+instruction was only reached upon a detected `KEYHIT` change. With
+**no visible key response**, it cannot be identified as the crash
+trigger. It remains an important static defect caught in the postmortem,
+**not** a confirmed explanation of the observed reset-like behavior.
+
+**Decision:** retire the raw `KEYHIT` foreground-poll design. Do not
+repair one instruction and ask for another `CPKTEST` run. Keep C1 as
+the accepted physical baseline.
+
+### Preferred next step: retain the proven cooperative BASIC event loop
+
+There is no architectural requirement that a management console's
+scheduler must itself be 100% Capricorn machine code. A small HP BASIC
+foreground pump can reliably own `KBDBUFFER/KBDISKEY/KBDKEY` (C0/C1
+physical acceptance), while native `CPUI` assembly handles state
+changes and CRT drawing. When no key is pending, BASIC can call a
+**bounded `CPUPOLL`/service routine** that returns promptly, providing
+an eventual place to move printer bytes through native HP printer
+services and to reflect CP/M ready/not-ready mode.
+
+This would preserve a continuously running user-facing HP management
+console, avoid direct `KEYHIT` busy polling, and keep the native
+code short and testable. Next features would be staged:
+
+1. Add a bounded, no-peripheral-operation `CPUPOLL` proof and
+   heartbeat on the accepted C1 event-pump path.
+2. Add HP/Teensy mode signaling (UI and Control) with ready initially
+   **always false**, then explicit FIFO/credit semantics.
+3. Add native printer output via HP's configured `PRINTER IS`
+   service, only after independent offline/error handling tests.
+
+An all-native event source may be researched in parallel, but is
+**not a prerequisite** to resuming printer-console development.
+
 ## Crash assessment and recovery
 
 1. **Concrete defect:** The event path used `JSB =K2KEY`, while
    `K2KEY` was a local **relocatable code label**, not a firmware
-   address-cell pointer. Calls to local relocated CPM85 code must use
+   address-cell pointer. **This defect was not confirmed to have
+   executed during the observed crash** (no keys responded). Calls to
+   local relocated CPM85 code must use
    the established `JSB X14,<label>` convention with the relocated
    `BINTAB` base. The C2 call could jump through invalid bytes as
-   soon as a changed `KEYHIT` value reached its handler. This is the
-   leading specific defect, not an established hardware root cause.
+   soon as a changed `KEYHIT` value reached its handler. It is a
+   concrete defect, but no longer the leading explanation for the
+   observed failure given the absence of detected keyboard input.
 2. **Unvalidated assumption:** Polling HP RAM `KEYHIT` in a tight
    native foreground loop may not drive or yield to the firmware
    keyboard event path; the alleged time-out was merely counted CPU
