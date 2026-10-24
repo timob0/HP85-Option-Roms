@@ -656,7 +656,7 @@ UIBAD   JSB =ERRORP
 ! scrolls rather than clearing the CRT so previous BASIC text survives.
 UIDRAW  LDM R26,=UITITLE
         ADMD R26,=BINTAB
-        LDM R36,=19D,0
+        LDM R36,=25D,0
         JSB =OUTSTR
         BIN
         LDMD R14,=BINTAB
@@ -679,7 +679,7 @@ UIDRUI  LDM R26,=UIMENU
         JMP UIDR3
 UIDR1   LDM R26,=UIDRIVES
         ADMD R26,=BINTAB
-        LDM R36,=27D,0
+        LDM R36,=26D,0
         JSB =OUTSTR
         JMP UIRET
 UIDR2   LDM R26,=UIDEVICE
@@ -689,13 +689,13 @@ UIDR2   LDM R26,=UIDEVICE
         JMP UIRET
 UIDR3   LDM R26,=UISYSTEM
         ADMD R26,=BINTAB
-        LDM R36,=27D,0
+        LDM R36,=26D,0
         JSB =OUTSTR
         JMP UIRET
 
 UIDRCT  LDM R26,=UICTRL
         ADMD R26,=BINTAB
-        LDM R36,=26D,0
+        LDM R36,=28D,0
         JSB =OUTSTR
         LDM R26,=UIPAUSE
         ADMD R26,=BINTAB
