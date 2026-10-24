@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.04c -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
+! CPM85 v0.05a EXPERIMENTAL -- existing CPM plus isolated CPUI console probe
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -22,6 +22,8 @@
 !       CPDIMGS      ! list .DSK images in /cpm/disks
 !       CPDMK "WORK.DSK" ! create fresh 8 MiB disk on Teensy SD
 !       CPDCAT "A:"     ! read-only native BDOS directory catalog
+!       CPUI 0          ! native C1 console state + CRT, BASIC key pump
+!       CPUI K          ! deliver raw keyboard code from KBDKEY (C1 probe)
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -69,6 +71,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPDIMGS
         DEF ONESTR    ! CPDMK
         DEF ONESTR    ! CPDCAT
+        DEF UIKPAR    ! CPUI - numeric raw keyboard code
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -83,6 +86,7 @@ RUNTIM  BYT 0,0
         DEF CPIMGS
         DEF CPMAKE
         DEF CPCAT
+        DEF UIRUN
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -97,6 +101,7 @@ ASCIIS  ASP "CPM"
         ASP "CPDIMGS"
         ASP "CPDMK"
         ASP "CPDCAT"
+        ASP "CPUI"
 
 ERMSG   BYT 377
 
@@ -130,6 +135,21 @@ CSERR   POBD R47,-R6
         JSB =ERRORP
         BYT 81D
 
+! CPUI: C1 experimental numeric raw-keycode receiver.
+! Parser and ONER/CONINT runtime follow the proven PRINTER85 PRTKEYS
+! LOADBIN path. No undocumented native key polling is attempted yet.
+UIKPAR  PUBD R43,+R6
+        JSB =NUMVP
+        JEN UIKOK
+        JMP UIKERR
+UIKOK   POBD R47,-R6
+        LDB R45,=371
+        PUMD R45,+R12
+        RTN
+UIKERR  POBD R47,-R6
+        JSB =ERRORP
+        BYT 81D
+
 ! Standalone binary lifetime.  ROMFL=3 is LOADBIN, =2/5 unload as used
 ! by PRINTER85's validated standalone build; ROMFL=1 indicates RESET
 ! rewrote the system intercept, so only clear our state flag.
@@ -150,11 +170,15 @@ INLOAD  LDMD R14,=BINTAB
         STBD R20,X14,KHACT
         STBD R20,X14,KCOUNT
         STBD R20,X14,KLAST
+        STBD R20,X14,UIACT
+        STBD R20,X14,UIMODE
+        STBD R20,X14,UIPAGE
         RTN
 
 INRESET LDMD R14,=BINTAB
         CLB R20
         STBD R20,X14,KHACT
+        STBD R20,X14,UIACT
         RTN
 
 INUNLD  LDMD R14,=BINTAB
@@ -541,6 +565,147 @@ CPRLONG ASP "CPM85 REPLY LIMIT"
 CPSPACE BYT 40         ! octal ASCII space, one byte for OUTSTR newline
 CPMKPFX ASP "CREATING "
 
+! ---------------------------------------------------------------
+! CPUI key -- C1 experimental native state machine and CRT renderer.
+! Executed only from normal HP BASIC statements, NEVER from CHIDLE.
+! A small BASIC program owns KBDBUFFER/KBDKEY foreground polling.
+! All CPUI output uses HP-native OUTSTR (not PRINT or HP-IB).
+! This stage DOES NOT attach keyboard, emit EBTKS keys or receive LST.
+! ---------------------------------------------------------------
+        BYT 241
+UIRUN   SAD
+        BIN
+        LDMD R14,=BINTAB
+        JSB =ONER
+        BIN
+        LDMD R14,=BINTAB
+        STMD R#,X14,UIREAL
+        LDMD R60,X14,UIREAL
+        JSB =CONINT
+        BIN
+        LDMD R14,=BINTAB
+        LDB R20,R77
+        JNZ UIBAD
+        LDB R22,R76
+        CMB R22,=0
+        JNZ UIEVENT
+        JMP UIINIT
+
+UIEVENT LDBD R20,X14,UIACT
+        CMB R20,=1
+        JNZ UIBAD
+        CMB R22,=207
+        JNZ UICHECK
+        JMP UIEXIT
+UICHECK CMB R22,=203
+        JNZ UIMENK
+        JMP UISWCH
+UIMENK  LDBD R20,X14,UIMODE
+        CMB R20,=0
+        JNZ UIRET
+        CMB R22,=200
+        JNZ UICHK2
+        LDB R20,=1
+        JMP UISTPG
+UICHK2  CMB R22,=201
+        JNZ UICHK3
+        LDB R20,=2
+        JMP UISTPG
+UICHK3  CMB R22,=202
+        JNZ UIRET
+        LDB R20,=3
+UISTPG  STBD R20,X14,UIPAGE
+        JMP UIDRAW
+
+UIINIT  LDBD R20,X14,KHACT
+        CMB R20,=0
+        JNZ UIBAD
+        LDBD R20,=CHIDLE
+        CMB R20,=236
+        JNZ UIBAD
+        LDB R20,=1
+        STBD R20,X14,UIACT
+        STBD R20,X14,UIPAGE
+        CLB R20
+        STBD R20,X14,UIMODE
+        JMP UIDRAW
+
+UISWCH  LDBD R20,X14,UIMODE
+        CMB R20,=0
+        JNZ UISWUI
+        LDB R20,=1
+        STBD R20,X14,UIMODE
+        JMP UIDRAW
+UISWUI  CLB R20
+        STBD R20,X14,UIMODE
+        JMP UIDRAW
+
+UIEXIT  CLB R20
+        STBD R20,X14,UIACT
+        STBD R20,X14,UIMODE
+        LDM R26,=UIBYE
+        ADMD R26,=BINTAB
+        LDM R36,=18D,0
+        JSB =OUTSTR
+        JMP UIRET
+UIBAD   JSB =ERRORP
+        BYT 89D
+
+! All output goes through native CRT OUTSTR, never BASIC PRINT.
+! Each call emits one native CRT line; this first native renderer
+! scrolls rather than clearing the CRT so previous BASIC text survives.
+UIDRAW  LDM R26,=UITITLE
+        ADMD R26,=BINTAB
+        LDM R36,=19D,0
+        JSB =OUTSTR
+        BIN
+        LDMD R14,=BINTAB
+        LDBD R20,X14,UIMODE
+        CMB R20,=0
+        JZR UIDRUI
+        JMP UIDRCT
+
+UIDRUI  LDM R26,=UIMENU
+        ADMD R26,=BINTAB
+        LDM R36,=25D,0
+        JSB =OUTSTR
+        BIN
+        LDMD R14,=BINTAB
+        LDBD R20,X14,UIPAGE
+        CMB R20,=1
+        JZR UIDR1
+        CMB R20,=2
+        JZR UIDR2
+        JMP UIDR3
+UIDR1   LDM R26,=UIDRIVES
+        ADMD R26,=BINTAB
+        LDM R36,=27D,0
+        JSB =OUTSTR
+        JMP UIRET
+UIDR2   LDM R26,=UIDEVICE
+        ADMD R26,=BINTAB
+        LDM R36,=27D,0
+        JSB =OUTSTR
+        JMP UIRET
+UIDR3   LDM R26,=UISYSTEM
+        ADMD R26,=BINTAB
+        LDM R36,=27D,0
+        JSB =OUTSTR
+        JMP UIRET
+
+UIDRCT  LDM R26,=UICTRL
+        ADMD R26,=BINTAB
+        LDM R36,=26D,0
+        JSB =OUTSTR
+        LDM R26,=UIPAUSE
+        ADMD R26,=BINTAB
+        LDM R36,=25D,0
+        JSB =OUTSTR
+
+UIRET   BIN
+        PAD
+        RTN
+
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
 ! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
 KREL    BIN
@@ -611,18 +776,30 @@ CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
 CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
+UIREAL  BSZ 8D          ! temporary BASIC real, ONER/CONINT conversion
+UIACT   BSZ 1           ! native C1 console initialized
+UIMODE  BSZ 1           ! 0=management,1=simulated CP/M control
+UIPAGE  BSZ 1           ! 1=drives,2=devices,3=system
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
+UITITLE ASP "CPM85 CONSOLE C1 (NATIVE)"
+UIMENU  ASP "K1-3 PAGES K4 CPM K8 EXIT"
+UIDRIVESASP "DRIVES: NOT CONNECTED (C1)"
+UIDEVICEASP "DEVICES: NOT CONNECTED (C1)"
+UISYSTEMASP "SYSTEM: NOT CONNECTED (C1)"
+UICTRL  ASP "CP/M CONTROL: DEMO MODE ONLY"
+UIPAUSE ASP "KEYS/LST PAUSED (C1 DEMO)"
+UIBYE   ASP "CPM85 CONSOLE EXIT"
 ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.04c DISK CONTROL"
+VERMSG   ASP "CPM85 0.05a CONSOLE PROBE"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
-VERLEN  EQU 24D
+VERLEN  EQU 25D
 
 ! HP-85 addresses, all OCTAL (copied from tested PRINTER85 LOADBIN).
 BINTAB  DAD 101233
@@ -644,5 +821,8 @@ OUTCHR  DAD 35114      ! Output one character to HP CRT
 SCAN    DAD 11262
 OUTSTR  DAD 35052
 CONBIN  DAD 03572
+NUMVP   DAD 12407      ! numeric parser, PRINTER85 tested
+ONER    DAD 56215      ! pop BASIC REAL into R#
+CONINT  DAD 44321      ! REAL -> binary integer R76/R77
 
         FIN
