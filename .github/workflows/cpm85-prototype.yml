@@ -18,6 +18,8 @@ jobs:
         run: python tests/check_cpm85_keywords.py
       - name: Validate standalone foreground console BASIC test
         run: python tests/check_cpm_console_skeleton.py
+      - name: Validate native CPUI console key pump
+        run: python tests/check_cpm_console_c1.py
       - name: Assemble standalone HP-85 binary
         run: |
           mkdir -p build
