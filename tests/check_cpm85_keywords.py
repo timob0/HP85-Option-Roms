@@ -191,14 +191,14 @@ for name in ("UIACT","UIMODE","UIPAGE"):
     assert name+"   BSZ 1" in text or name+"  BSZ 1" in text
 # Regression against the literal-length error: every native OUTSTR
 # display block must transmit exactly the bytes in its ASP message.
-pairs = __import__("re").findall(
-    r"LDM R26,=(UI[A-Z]+)\\n\\s+ADMD R26,=BINTAB\\n\\s+LDM R36,=(\\d+)D,0",
+pairs = re.findall(
+    r"LDM R26,=(UI[A-Z]+)\n\s+ADMD R26,=BINTAB\n\s+LDM R36,=(\d+)D,0",
     native_ui)
 assert len(pairs)==8, pairs
 for name, n in pairs:
-    m = __import__("re").search(r"^"+name+r"\\s+ASP \\"([^\\"]+)\\"",
-                                text,__import__("re").M)
+    m = re.search(r'^'+name+r'\s+ASP "([^"]+)"', text, re.M)
     assert m and int(n)==len(m.group(1)), (name,n,m.group(1) if m else None)
+
 assert "NUMVP   DAD 12407" in text
 assert "ONER    DAD 56215" in text
 assert "CONINT  DAD 44321" in text
