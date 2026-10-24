@@ -1,3 +1,61 @@
+# Stage C2 — native KEYHIT experiment QUARANTINED after hardware crash
+
+**Hardware result (2026-10-24): FAIL — physical HP-85 crashed when
+`CPKTEST` was invoked on CPM85 v0.05b.** Treat all prior C2 test
+instructions below as **historical and unsafe**; do not repeat them.
+The prior successful GitHub Actions tests only covered assembly and
+static source checks, not safe operation on hardware.
+
+## Crash assessment and recovery
+
+1. **Concrete defect:** The event path used `JSB =K2KEY`, while
+   `K2KEY` was a local **relocatable code label**, not a firmware
+   address-cell pointer. Calls to local relocated CPM85 code must use
+   the established `JSB X14,<label>` convention with the relocated
+   `BINTAB` base. The C2 call could jump through invalid bytes as
+   soon as a changed `KEYHIT` value reached its handler. This is the
+   leading specific defect, not an established hardware root cause.
+2. **Unvalidated assumption:** Polling HP RAM `KEYHIT` in a tight
+   native foreground loop may not drive or yield to the firmware
+   keyboard event path; the alleged time-out was merely counted CPU
+   instructions, not a real-time watchdog. It could starve essential
+   interpreter/hardware services. This approach should not be repeated
+   without a verified native keyboard interface.
+3. **Immediate software containment:** CPM85 **v0.05c** on the same
+   `feature/cpm85-hpib-output` branch replaces `CPKTEST` with a
+   simple native CRT notice, `CPKTEST DISABLED - SEE C2 DOC`, and a
+   normal return to HP BASIC. The suspect foreground polling code
+   was **removed** from the executable source (preserved solely in
+   commit `7c7d9cd3` for analysis). `CPKCOUNT`/`CPKLAST` remain
+   registered as zero-valued compatibility diagnostics. The working
+   C1 `CPUI`/BASIC-key-pump and legacy `CPM` are unchanged.
+4. **Safe rollback:** For a hardware-tested firmware, obtain the C1
+   source at commit `13655f2d8bd0889b91aa4d0a47c8936bcb429d0c`
+   in the HP Option ROM repository and rebuild the corresponding
+   `CPM85.dat`. This is preferable to invoking or re-flashing the
+   unvalidated v0.05b C2 LOADBIN. Reset/power-cycle the HP-85 after a
+   crash and preserve storage backups. No ESP32 or Teensy firmware
+   changes are needed.
+
+Do not regard v0.05c as hardware validated yet, even if source tests
+pass. No `main` branch was changed. **C1 is the last physically
+accepted console milestone.**
+
+## Revised C2 design gate
+
+Before any new all-native foreground loop, find and validate an
+officially documented keyboard input/queue entry point or equivalent
+interpreter-cooperative event mechanism that works *during* a native
+LOADBIN statement. Prefer a test in which **each call is bounded and
+returns immediately to HP BASIC**. A native tight spin or polling
+of `KEYHIT` without a firmware scheduler guarantee is not acceptable.
+Do not connect CP/M keyboard, printer receive, HPIB or `LISTST`
+readiness until this gate is proven on hardware.
+
+---
+
+## Historical v0.05b experiment — RETIRED; DO NOT RUN
+
 # CPM85 Stage C2 — bounded all-native KEYHIT input feasibility probe
 
 **Status (2026-10-24): native source implemented, CAPASM/CAPLIF and
