@@ -1,7 +1,9 @@
 # CPM85 Stage C2 — bounded all-native KEYHIT input feasibility probe
 
-**Status (2026-10-24): native test source implemented; HP-85 hardware
-validation PENDING.** Existing C1 hybrid `CPUI` and accepted legacy
+**Status (2026-10-24): native source implemented, CAPASM/CAPLIF and
+C0/C1/C2 regressions PASS (GitHub Actions run 40135355588, source
+SHA 7c7d9cd3a9ed8e81e835939e23b3d3c56b4fc38f). Physical HP-85
+keyboard validation PENDING.** Existing C1 hybrid `CPUI` and accepted legacy
 `CPM` commands remain intact; no ESP32/Teensy firmware changes.
 Development branch: `feature/cpm85-hpib-output`.
 This is **not yet** a production keyboard replacement or CP/M control mode.
