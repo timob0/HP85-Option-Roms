@@ -10,7 +10,7 @@ import re
 asm=(Path(__file__).resolve().parents[1] / "src" / "cpm85.asm").read_text()
 names=re.findall(r'^\s*ASP "([A-Z]+)"',
                  asm.split("ASCIIS  ",1)[1].split("\n\nERMSG",1)[0],re.M)
-assert names[-3:]==["CPKTEST","CPKCOUNT","CPKLAST"],names
+assert names[-4:]==["CPKTEST","CPKCOUNT","CPKLAST","CMENU"],names
 runtime=asm.split("RUNTIM  BYT 0,0",1)[1].split("ASCIIS  ",1)[0]
 for n in ("K2RUN","K2CNT","K2LST"):
     assert "DEF "+n in runtime
