@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -54,12 +54,19 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.04c DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.04d DISK CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
-for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE", "CPCAT"):
+for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
     assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
-print("PASS: CPM85 CP/M drive-control ABI and string parsers")
+# CPRESET remains Z80-only opcode 4. New CPREBOOT uses the same
+# no-argument parser and reply path, but opcode 8 is Teensy-local.
+reset = text.split("CPRESE  BIN", 1)[1].split("CPRBOT  BIN", 1)[0]
+reboot = text.split("CPRBOT  BIN", 1)[1].split("CPUMNT  BIN", 1)[0]
+assert "LDB R22,=4" in reset and "JSB X14,CPGO" in reset
+assert "LDB R22,=8" in reboot and "JSB X14,CPGO" in reboot
+assert "JSB X14,CPCLR" in reboot and "POMD" not in reboot
+print("PASS: CPM85 CP/M drive-control ABI, CPREBOOT and string parsers")
 
 # HP CRT OUTCHR renders raw control bytes as graphics. Use the proven
 # byte-by-byte printable-char path, and OUTSTR only for actual CRT newline.
@@ -145,7 +152,8 @@ for start,end in (("OFFRUN  SAD", "VERRUN  LDM"),
 # reach CPGO, which handles success, error, timeout and reply-limit newlines.
 for start,end in (("CPCAT   BIN","CPBANN  BIN"),
                   ("CPSTAT  BIN","CPRESE  BIN"),
-                  ("CPRESE  BIN","CPUMNT  BIN"),
+                  ("CPRESE  BIN","CPRBOT  BIN"),
+                  ("CPRBOT  BIN","CPUMNT  BIN"),
                   ("CPUMNT  BIN","CPDMNT  BIN"),
                   ("CPDMNT  BIN","CPIMGS  BIN"),
                   ("CPIMGS  BIN","CPMAKE  BIN"),
@@ -163,4 +171,4 @@ assert "CPDONE  LDMD" in transport and "JZR CPFIN" in transport
 for start,end in (("CNTFUN  BIN","LSTFUN  BIN"),
                   ("LSTFUN  BIN","CPSTAT  BIN")):
     assert "JSB =OUTSTR" not in text.split(start,1)[1].split(end,1)[0]
-print("PASS: all ten CPM85 statements leave a fresh HP BASIC input line; numeric functions unchanged")
+print("PASS: all CPM85 statements including CPREBOOT leave a fresh HP BASIC line")
