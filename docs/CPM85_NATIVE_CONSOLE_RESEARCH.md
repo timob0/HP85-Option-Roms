@@ -7,6 +7,88 @@ keyboard pump in a separate BASIC test program). The C2 v0.05b foreground
 KEYHIT polling experiment physically crashed; v0.05c quarantines it.
 Do **not** rerun v0.05b `CPKTEST`.
 
+## 2026-10-25 — Clock/interrupt versus cooperative print service research
+
+**Finding:** The HP-85 has a millisecond system clock and three
+programmable BASIC timers (`ON TIMER# 1..3`). They are useful for
+running BASIC programs, but **not a free, source-independent LOADBIN
+timer callback**. HP's BASIC documentation says an ON TIMER#
+declaration must be within a program, and the Advanced Programming
+reference notes that timer branches are local to the declaring program
+and do not interrupt other programs. Reserving one of these timers would
+also risk interfering with the BASIC application being edited.
+
+Authoritative primary documentation:
+- HP Assembler ROM Manual, Section 3, `https://www.akso.de/fileadmin/Series_80/Assembler_ROM_Manual.pdf`.
+  This states that clock interrupts invoke the ON TIMER machinery,
+  **IRQ20 and IOSP belong to I/O interrupts, not a periodic 20 ms tick**,
+  and the firmware executive loop *always* tests CSTAT, tests XCOM,
+  and calls RMIDLE.
+- HP-85 Owners Manual, timer section,
+  `https://www.kaser.com/hp85_series80org/HP85-MainBW.pdf`;
+  the ON TIMER# statement must be declared within a program.
+- HP-85 Advanced Programming Manual,
+  `https://www.series80.org/PDFs/HP85-AdvProg.pdf`,
+  documents program-local timer branches.
+- CAPASM globals85 and EBTKS headers show `TIMTAB`, `TIMTB2`,
+  `TIMTB3`, `CLKSTS`, `CLKDAT`, `IRQ20`, `RMIDLE`.
+  The mere existence of a symbol **does not** establish a callable
+  periodic extension API.
+
+**Preferred scheduler:** Use *cooperative native idle service through
+the existing RMIDLE integration*, rather than a new periodic ISR.
+EBTKS AUXROM already owns RMIDLE to inject autostart/batch/Wi-Fi
+keyboard events. Its Teensy code `AUXROM_RMIDLE()` dispatches when the
+HP EXEC loop reaches the hook. We must preserve/compose with that
+implementation, not replace its seven-byte hook.
+
+**Important distinction:** RMIDLE is serviced when the HP executive
+loop is reached, **not guaranteed at fixed real-time intervals** or
+when the CPU is inside arbitrary long BASIC computation or HP-IB
+transaction. Therefore a readiness flag must reflect service
+capacity/freshness and buffer credits, not a timer-dependent constant.
+
+### Two-stage, bounded printer service model
+
+1. On every eligible *safe* idle callback, cheaply check console mode,
+   guest LST FIFO occupancy and printer/link state without blocking.
+   When UI mode active or session detached: set LST not ready and do
+   not forward/consume print bytes.
+2. In Control mode, request/acknowledge **at most a bounded small
+   portion** from the ESP32/Teensy buffer, and use a **verified native
+   printer work context** to call HP's printer/HP-IB firmware service
+   honoring `PRINTER IS`. Initial design experiments can try
+   16–32 bytes per dispatch; this is **an unmeasured starting point**.
+   Do not equate bytes received at HP port with bytes delivered to a
+   physical printer.
+3. Backpressure must propagate from HP printer delivery/credit to the
+   ESP32 and CP/M `LISTST`. Dequeue/ack only after the HP printer
+   routine has safely accepted/committed the bytes, and distinguish
+   acceptance by an HP output routine from delivery by the external
+   printer. Programs may call `LIST` without checking `LISTST`; a
+   bounded pending buffer plus recoverable error/cancel policy remains
+   necessary. UI mode transitions must quiesce in-flight work before
+   withdrawing credits.
+4. If a single HP printer call can stall indefinitely due to HP-IB
+   handshake/offline behavior, chopping a job into chunks **does not
+   by itself prevent blocking**. Native HP output timeouts/nonblocking
+   status and how to report an offline printer must be examined and
+   hardware-verified before enabling live routing.
+5. The HP native timer/interrupt path, if identified in more detail
+   later, should **at most set a one-byte pending flag**. Never run
+   HP-IB transactions, allocate, render CRT, write Teensy SD, or do
+   transport handshakes from hardware/clock/keyboard interrupt
+   contexts. Avoid reserving one of the user's BASIC timers.
+
+**Concrete next feasibility gate:** instrument the *already-owned*
+EBTKS RMIDLE path to count callbacks during an attached CPM console,
+including while no keys are pressed. Expose a read-only status
+counter only through a safe existing management/status interface;
+do not change RMIDLE ownership. Confirm an HP-safe native dispatch
+path separately with no printer IO. After that, test a
+printer-offline scenario with **ready held false** before attempting
+real LST bytes.
+
 ## Requirement clarified by user
 
 The finished `CPM` command must launch a complete management console
