@@ -49,6 +49,7 @@ for forbidden in ("=CPKEY","=CPCTL","=CPARG","=CPOPC","=CPSTATE","=CPRPLY",
 draw=s.split("RMDRAW  LDMD R14,=BINTAB",1)[1].split("! KREL: restore",1)[0]
 assert "LDBD R20,=CRTWRS" in draw
 assert "LDMD R40,=CRTRAM" in draw
+assert "ANM R40,=377,17" in draw  # wrap strictly inside HP-85 4-Ki-nibble alpha RAM
 assert "STBD R40,=CRTBAD" in draw and "STBD R41,=CRTBAD" in draw
 assert "STBD R22,=CRTDAT" in draw
 assert "LDMD R40,=CRTBYT" in draw
