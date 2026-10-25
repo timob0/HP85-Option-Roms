@@ -20,7 +20,7 @@ assert "LDM R26,=K2STOP" in disabled
 assert "JSB =OUTSTR" in disabled
 assert "BIN\n        PAD\n        RTN" in disabled
 assert 'K2STOP  ASP "CPKTEST DISABLED - SEE C2 DOC"' in asm
-assert 'VERMSG   ASP "CPM85 0.05c C2 DISABLED"' in asm
+assert 'VERMSG   ASP "CPM85 0.06a RMIDLE PROBE"' in asm
 assert re.search(r"BYT 0,55\s+K2CNT\s+BIN",block)
 assert re.search(r"BYT 0,55\s+K2LST\s+BIN",block)
 for old in ("K2ARM","K2POLL","K2RELD","K2SEEN","K2KEY",
