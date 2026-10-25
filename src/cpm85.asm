@@ -295,7 +295,7 @@ MNFREE  LDBD R20,=CHIDLE
         BYT 89D
 MNOK    LDM R26,=MNMSG
         ADMD R26,=BINTAB
-        LDM R36,=30D,0
+        LDM R36,=28D,0
         JSB =OUTSTR
         BIN
         LDMD R14,=BINTAB
