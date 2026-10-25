@@ -1004,6 +1004,8 @@ RMDRAW  LDMD R14,=BINTAB
 ! Compute visible row 2 start as CRTRAM + 2*32*2 = 0200 oct.
         LDMD R40,=CRTRAM
         ADM R40,=200,0
+! HP-85 alpha RAM is 4096 nibbles; wrap within 000000..007777.
+        ANM R40,=377,17
         STBD R40,=CRTBAD
         STBD R41,=CRTBAD
         LDM R34,=RMLINE
