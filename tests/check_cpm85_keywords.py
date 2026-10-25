@@ -64,7 +64,8 @@ for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAK
 reset = text.split("CPRESE  BIN", 1)[1].split("CPRBOT  BIN", 1)[0]
 reboot = text.split("CPRBOT  BIN", 1)[1].split("CPUMNT  BIN", 1)[0]
 assert "LDB R22,=4" in reset and "JSB X14,CPGO" in reset
-assert "LDB R22,=8" in reboot and "JSB X14,CPGO" in reboot
+assert "LDB R22,=10" in reboot and "JSB X14,CPGO" in reboot
+assert "LDB R22,=8\n" not in reboot  # bare 8 is invalid: CAPASM defaults to octal
 assert "JSB X14,CPCLR" in reboot and "POMD" not in reboot
 print("PASS: CPM85 CP/M drive-control ABI, CPREBOOT and string parsers")
 
