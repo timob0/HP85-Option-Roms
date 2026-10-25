@@ -362,7 +362,7 @@ MNKSAV  POBD R22,+R34
 ! Native CRT output before returning to editor; no BASIC program loaded.
         LDM R26,=MNMSG
         ADMD R26,=BINTAB
-        LDM R36,=31D,0
+        LDM R36,=32D,0
         JSB =OUTSTR
         BIN
         PAD
@@ -954,12 +954,14 @@ RMCHAIN POMD R40,-R6
         POMD R20,-R6
         POMD R10,-R6
 
-! Execute the unchanged seven-byte previous hook in relocated RAM.
-! Saved: JSB =ROMJSB; DEF 063463; BYT 361; RTN.
-! It must execute LAST so AUXROM controls returned E/status exactly
-! as it did before this module was installed.
-        LDMD R14,=BINTAB
-        JSB X14,RMSAVE
+! Invoke the EXACT original ROMJSB descriptor directly AFTER
+! restoring registers. Its 7-byte RAM image is saved for K8 cleanup
+! and was compared byte-by-byte before installation. This avoids
+! clobbering the caller's R14 just to locate our saved bytes.
+! ROM361 runs last and owns the final E/status as before our hook.
+        JSB =ROMJSB
+        DEF 63463
+        BYT 361
         RTN
 
 ! RM native alpha-line painter. CRTBAD accepts 2 consecutive writes
@@ -1203,6 +1205,7 @@ CRTBYT  DAD 100176
 CRTBAD  DAD 177405
 CRTSTS  DAD 177406
 CRTDAT  DAD 177407
+ROMJSB  DAD 4776
 KEYHIT  DAD 100671
 EOJ2    DAD 34772
 CPKEY   DAD 177741     ! EBTKS keyboard data I/O port
