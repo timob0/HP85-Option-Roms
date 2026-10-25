@@ -60,7 +60,7 @@ The first 32 registers have a boundary every TWO bytes; the upper
 Only **14 bytes** were saved, not 32 or all `R10..R47`.
 The immediately following `LDMD R14,=BINTAB` corrupts
 **R14–R15** from the calling HP EXEC context. The first display
-call also overwrites **R22–R23** and **R34–R35** (and other
+call also overwrites **R22** and **R34–R35** (and other
 registers) without saving them. The four corresponding POMD
 instructions restore only the four partial regions. Consequently
 the original AUXROM 361 RMIDLE service was always called with
