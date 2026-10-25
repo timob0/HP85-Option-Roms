@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.05c -- C2 unsafe native keyboard experiment disabled after HP crash
+! CPM85 v0.06a -- C2a RMIDLE console test, C2 unsafe poll remains disabled
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -24,6 +24,7 @@
 !       CPDCAT "A:"     ! read-only native BDOS directory catalog
 !       CPUI 0          ! native C1 console state + CRT, BASIC key pump
 !       CPUI K          ! deliver raw keyboard code from KBDKEY (C1 probe)
+!       C85MENU         ! C2a source-free RMIDLE status console + K1-K4 / K8
 !       CPKTEST         ! DISABLED safe return after C2 hardware crash
 !       CPKCOUNT        ! compatibility diagnostic (0 in quarantined C2)
 !       CPKLAST         ! compatibility diagnostic (0 in quarantined C2)
@@ -78,6 +79,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPKTEST bounded native input probe
         DEF NOPARS    ! CPKCOUNT numeric diagnostic
         DEF NOPARS    ! CPKLAST numeric diagnostic
+        DEF NOPARS    ! C85MENU source-free console experiment
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -96,6 +98,7 @@ RUNTIM  BYT 0,0
         DEF K2RUN
         DEF K2CNT
         DEF K2LST
+        DEF MNRUN
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -114,6 +117,7 @@ ASCIIS  ASP "CPM"
         ASP "CPKTEST"
         ASP "CPKCOUNT"
         ASP "CPKLAST"
+        ASP "C85MENU"
 
 ERMSG   BYT 377
 
@@ -260,6 +264,62 @@ CPBUSY  LDM R26,=BSYMSG
         JSB =OUTSTR
 
 CPMRET  BIN
+        PAD
+        RTN
+
+! ---------------------------------------------------------------
+! C85MENU: C2a opt-in, source-free resident native console probe.
+! Uses the same physically proven CHIDLE trampoline / EOJ2 and
+! K8 detach as CPM. DOES NOT run any CPU-spinning HP loop.
+!
+! Control value 2 tells development Teensy to count REAL RMIDLE
+! callbacks and draw a throttled CRT counter from its main loop.
+! The standard CP/M key forwarder remains detached (value!=1).
+! Any K1-K4 key is sent through CPKEY but the Teensy probe only
+! updates local page/mode flags; it forwards nothing to the ESP32.
+! An old Teensy ignores value 2; K8 exit still works locally.
+! ---------------------------------------------------------------
+        BYT 241
+MNRUN   SAD
+        BIN
+        LDMD R14,=BINTAB
+        LDBD R20,X14,KHACT
+        CMB R20,=0
+        JZR MNFREE
+        JSB =ERRORP
+        BYT 89D
+MNFREE  LDBD R20,=CHIDLE
+        CMB R20,=236
+        JZR MNOK
+        JSB =ERRORP
+        BYT 89D
+MNOK    LDM R26,=MNMSG
+        ADMD R26,=BINTAB
+        LDM R36,=30D,0
+        JSB =OUTSTR
+        BIN
+        LDMD R14,=BINTAB
+        LDM R34,=CHIDLE
+        LDM R36,=KHSAVE
+        ADM R36,R14
+        LDB R20,=7
+MNSAVE  POBD R22,+R34
+        PUBD R22,+R36
+        DCB R20
+        JNZ MNSAVE
+
+! Same validated 4-byte CHIDLE stub as CPMRUN: JSB <KHOOK>, RTN.
+        LDMD R14,=BINTAB
+        LDM R46,=KHOOK
+        ADM R46,R14
+        STM R46,R45
+        LDB R47,=236
+        LDB R44,=316
+        STMD R44,=CHIDLE
+        LDB R20,=2
+        STBD R20,X14,KHACT
+        STBD R20,=CPCTL
+        BIN
         PAD
         RTN
 
@@ -881,11 +941,12 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.05c C2 DISABLED"
+MNMSG    ASP "C85MENU RMIDLE TEST - K8 EXITS"
+VERMSG   ASP "CPM85 0.06a RMIDLE PROBE"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
-VERLEN  EQU 23D
+VERLEN  EQU 24D
 
 ! HP-85 addresses, all OCTAL (copied from tested PRINTER85 LOADBIN).
 BINTAB  DAD 101233
