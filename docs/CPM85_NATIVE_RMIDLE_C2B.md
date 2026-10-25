@@ -1,3 +1,70 @@
+# HARDWARE-REJECTED — C2b native RMIDLE experiment
+
+**Physical HP-85 result (2026-10-25): FAIL. DO NOT BUILD OR RUN
+CPM85 v0.06b `CMENU` again.** The user reports no visible counter,
+machine freeze with no response to K8, and recovery after pressing
+RESET (warm boot). This overrides the earlier CAPASM/CAPLIF and source
+regression success: successful compilation is not evidence that an
+HP firmware hook or native CRT write is safe on hardware.
+
+**Recovery committed:** on `timob0/HP85-Option-Roms`
+`feature/cpm85-hpib-output`, restored `src/cpm85.asm`,
+keyword tests and CI from the pre-C2b commit
+`72d389ae33a77c6b239ca09116a609a2942a1ddb`, corresponding
+to experimental v0.05c with failed C2 foreground polling disabled
+and C1 `CPUI` preserved. Removed the misleading C2b-specific
+regression that asserted the failed hook implementation was present.
+No EBTKS Teensy or ESP32 firmware changes. All `main` branches
+remain untouched.
+
+**Last physically accepted console:** C1 v0.05a, commit
+`13655f2d8bd0889b91aa4d0a47c8936bcb429d0c`.
+Use this previously tested source/image for ordinary HP operation.
+v0.05c is a source rollback baseline, not independently physically
+accepted. Following RESET, reloading the accepted C1 LOADBIN is
+recommended before further testing; do not retry experimental CMENU.
+
+## Technical postmortem (hypotheses, not confirmed root cause)
+
+The C2b implementation modified **two live HP RAM hook vectors**.
+On CMENU entry it installed a resident CHIDLE keyboard intercept and
+a new RMIDLE trampoline intended to call existing AUXROM ROM361
+handler. RMHOOK also attempted **direct CRTBUSY/CRTBAD/CRTDAT
+display writes inside the RMIDLE callback**. Because RMDIRTY
+started at 1, the first callback was supposed to execute the CRT
+drawing path immediately, before the first counter appeared.
+
+The complete absence of a visible counter **does not show that
+RMIDLE never ran**: execution may have frozen in the hook wrapper,
+the very first CRT operation, the original ROMJSB call, or the
+hook return/stack path. The user-visible failure does not
+distinguish these possibilities.
+
+The first design flaw was conflating three uncertain mechanisms in
+one hardware test: new hook chaining/return semantics, potentially
+sensitive native CRT I/O during EXEC RMIDLE, and hook cleanup upon
+K8. Even bounded display status polls do not prove they are
+safe or nonintrusive inside the HP firmware's EXEC callback.
+The static test guarded byte patterns and source operations but
+did not model ROMJSB stack/register/condition behavior, callback
+reentrancy, or CRT controller timing. There is no basis to conclude
+that only a particular instruction caused the freeze.
+
+**Revised investigation gate:** no new binary should install RMIDLE
+and draw the CRT in the same initial experiment. Obtain or inspect
+the exact HP-85 ROMJSB/EXEC hook calling convention and, ideally,
+reproduce in an HP-85 emulator or disassembler first. If still
+attempted on hardware, a *counter-only*, no-screen, no-HP-IB
+hook probe with a direct K8/RESET recovery path must pass on its
+own, with the value read after K8 from BASIC. Screen rendering
+would be a separate stage after the hook lifecycle is demonstrated.
+Avoid overwriting the EBTKS AUXROM RMIDLE slot if its original handler
+cannot be faithfully preserved and chained.
+
+---
+
+## Retired v0.06b instructions — historical only; DO NOT RUN
+
 # CPM85 C2b — first all-HP-native RMIDLE counter and modal keyboard console
 
 **Status: experimental, native CAPASM/CAPLIF CI passing; physical HP-85
