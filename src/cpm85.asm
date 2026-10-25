@@ -325,6 +325,10 @@ MNCOPY  POBD R22,+R34
         LDB R20,=1
         STBD R20,X14,RMPAGE
         STBD R20,X14,RMDIRTY
+        LDB R20,=60
+        STBD R20,X14,RMDIG0
+        STBD R20,X14,RMDIG1
+        STBD R20,X14,RMDIG2
 
 ! Install CHIDLE first using physically verified CPMRUN stub.
         LDM R34,=CHIDLE
@@ -970,6 +974,7 @@ RMCHAIN POMD R40,-R6
 RMDRAW  LDMD R14,=BINTAB
         LDBD R20,=CRTWRS
         ANM R20,=200
+        CMB R20,=0
         JNZ RMDRET
 
 ! Patch private ASCII line: digits at offset 7..9, page 16, mode 23.
@@ -1007,6 +1012,7 @@ RMDRAW  LDMD R14,=BINTAB
 RMDLOOP LDB R31,=377
 RMDWAIT LDBD R20,=CRTSTS
         ANM R20,=200
+        CMB R20,=0
         JZR RMDWR
         DCB R31
         JNZ RMDWAIT
