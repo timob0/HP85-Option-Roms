@@ -24,6 +24,106 @@ v0.05c is a source rollback baseline, not independently physically
 accepted. Following RESET, reloading the accepted C1 LOADBIN is
 recommended before further testing; do not retry experimental CMENU.
 
+## Source audit update — VERIFIED register-save defect (2026-10-25)
+
+A closer review of the **retired v0.06b source at commit
+`f46b297a10cd09b739ddc9e727f5603e225382b6`**
+revealed a concrete, reproducible assembler semantics error.
+It is a strong candidate for the physical freeze, although the
+actual instruction at which execution stopped was not captured.
+
+### Definite: RMHOOK's register preservation was incomplete
+
+The original hook attempted to save all its CPU scratch registers via:
+
+```asm
+RMHOOK  BIN
+        PUMD R10,+R6
+        PUMD R20,+R6
+        PUMD R30,+R6
+        PUMD R40,+R6
+        LDMD R14,=BINTAB
+```
+
+This is **wrong on Capricorn**. Multi-byte instructions operate
+from the destination register only to the *next register boundary*.
+The first 32 registers have a boundary every TWO bytes; the upper
+32 registers have one every EIGHT bytes. Thus the actual saves are:
+
+| Source instruction | CPU bytes really saved |
+| --- | --- |
+| `PUMD R10,+R6` | R10–R11 only |
+| `PUMD R20,+R6` | R20–R21 only |
+| `PUMD R30,+R6` | R30–R31 only |
+| `PUMD R40,+R6` | R40–R47 (8 bytes) |
+
+Only **14 bytes** were saved, not 32 or all `R10..R47`.
+The immediately following `LDMD R14,=BINTAB` corrupts
+**R14–R15** from the calling HP EXEC context. The first display
+call also overwrites **R22–R23** and **R34–R35** (and other
+registers) without saving them. The four corresponding POMD
+instructions restore only the four partial regions. Consequently
+the original AUXROM 361 RMIDLE service was always called with
+an altered HP CPU register context, violating what a transparent
+hook chain needs to preserve. This defect would remain even if
+CRT output was removed but `LDMD R14` retained.
+
+Source of instruction semantics: *Capricorn CPU* assembler ROM
+documentation, pages 3-4 through 3-9 and 4-21, confirms the
+next-boundary rule for multi-byte CPU operations and PUMD/POMD.
+`https://www.jeffcalc.hp41.eu/emu75/files/capricorncpu.pdf`.
+The project **already knew this rule**: see
+`tests/check_cpm85_keywords.py` description of the earlier
+CPDMNT POMD R40 versus R30 operand-width problem.
+
+The known-good CHIDLE hook's register conventions cannot simply
+be reused for an EXEC hook that must continue into an existing
+AUXROM ROMJSB routine. CHIDLE's handled-key path *deliberately*
+unwinds/discards the editor's hook call stack via EOJ2, whereas
+RMIDLE chaining must preserve its caller's live context.
+
+### Independent structural risks (not isolated root causes)
+
+1. **CRT immediately on first RMIDLE invocation:** `MNRUN`
+   set `RMDIRTY=1`, guaranteeing `JSB X14,RMDRAW` on the
+   first callback, *before* invoking ROM361. Direct CRTBAD/CRTDAT
+   use and CRTSTS polling from RMIDLE had not been validated.
+2. **Not a time throttle:** the `RMTICK` byte overflow after every
+   256 callbacks imposes no guaranteed minimum wall-clock time
+   between 32-character CRT redraws. A fast HP EXEC loop could
+   therefore spend excessive time painting.
+3. **Original hook chaining context not independently validated:**
+   The inline `JSB =ROMJSB; BYT 63,147,361` matched the saved
+   descriptor at the byte level, but valid *nested* EXEC/R6/ROMJSB
+   execution and required processor status/condition preservation
+   were never verified on real hardware. Do not claim the descriptor
+   or chaining caused the crash solely from source inspection.
+4. **Restoration race/ownership limitation:** KREL skipped RMIDLE
+   restoration if four live installed bytes differed, but went on
+   to clear keyboard ownership. Re-entry and unload behavior after
+   another module changes the hook needs a defined fail-safe
+   lifecycle rather than assuming our hook always retains ownership.
+5. **Unverified CRT state restoration:** restoring CRTBAD using
+   `CRTBYT` and painting an absolute row in the native display
+   were never demonstrated to leave the editor/cursor entirely intact.
+
+### Correct investigative next step
+
+Do **not** fix only the four PUMD lines and immediately retest
+v0.06b. First, design a minimal transparent native RMIDLE chain
+that saves/restores **every register it writes, using the actual
+2-/8-byte boundary semantics**, and preserves whatever EXEC
+status/stack state the original ROM361 entry expects.
+Use a *counter-only* callback without CRT access, without
+keyboard hook changes, without ESP/Teensy I/O, and test the
+entry/exit semantics in an emulator or disassembly if possible.
+Only after that passes should the independent HP-native CRT
+renderer be integrated (preferably from a safe non-hook context).
+
+**No executable code has been changed by this audit**; the active
+feature branch stays on rolled-back v0.05c and the actual accepted
+HP hardware baseline remains C1 v0.05a.
+
 ## Technical postmortem (hypotheses, not confirmed root cause)
 
 The C2b implementation modified **two live HP RAM hook vectors**.
