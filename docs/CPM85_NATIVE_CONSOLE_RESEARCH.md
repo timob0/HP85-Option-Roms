@@ -7,6 +7,89 @@ keyboard pump in a separate BASIC test program). The C2 v0.05b foreground
 KEYHIT polling experiment physically crashed; v0.05c quarantines it.
 Do **not** rerun v0.05b `CPKTEST`.
 
+## 2026-10-25 — Architectural correction: HP-native RMIDLE and CRT only
+
+The user rejected the C2a implementation because it incorrectly
+counted callbacks inside Teensy's `AUXROM_RMIDLE()` and attempted to
+draw the HP CRT from EBTKS's `Write_on_CRT_Alpha` DMA path, gated
+by EBTKS `screenEmu`. EBTKS `screenEmu` is an optional screen
+emulation/mirroring infrastructure control; it is **not** the
+HP-native display interface for the SIMON85/CPM85 menu.
+
+**Physical result on the incorrect C2a binary:** No counter
+or page/mode visual response, but K8 exited cleanly and the HP BASIC
+program remained untouched. This establishes the native
+`CHIDLE` attach/detach is viable but tells **nothing** about
+native `RMIDLE` callback frequency because the displayed
+Teensy instrumentation never operated.
+
+**Recovery completed:** All experimental Teensy C2a code/build-flag
+changes removed from the feature branch and its files reset to
+`main`. The incorrect `CMENU` source, its tests and CI
+modifications are withdrawn from the HP branch by restoring
+the pre-C2a v0.05c (C2 disabled) sources. Original accepted
+CPM keyboard forwarding and C1 hybrid `CPUI` are preserved.
+No new firmware build is required just to acknowledge this correction;
+the old v0.06a CMENU image is obsolete and should not be used
+as a valid native RMIDLE test.
+
+**Correct native-only experiment (NOT YET IMPLEMENTED):**
+
+1. Keep the EBTKS firmware untouched. In HP LOADBIN assembly, `CMENU`
+   will install a native menu keyboard hook using the already-proven
+   CHIDLE/EOJ2 mechanism; K1–K4 update HP-side session state and K8
+   restores ownership.
+2. Inspect the **seven existing bytes** at HP RAM hook `RMIDLE`
+   (octal `0102434`, decimal 34076) **before** changing anything;
+   verify whether they encode a ROMJSB+DEF+ROM+RTN 7-byte hook
+   or a 4-byte RAM JSB+RTN stub. The EBTKS AUXROM handler is
+   already installed here, and must continue executing on
+   *every* callback.
+3. Build a verified, relocatable **chain-and-restore** native
+   RMIDLE trampoline. It may increment a RAM counter but MUST
+   dispatch the saved original hook unchanged, without changing
+   ROM selection/stack conventions, or reentering itself.
+   Atomic installation, concurrent event order, unload,
+   HP RESET, and K8 restoration need explicit tests.
+   Reject unfamiliar hook byte patterns rather than overwriting them.
+4. Render a small HP-native CRT counter/status field using a
+   documented HP system CRT primitive or carefully staged
+   native CRT write. No EBTKS video DMA, no `screenEmu`,
+   no `PRINT` redirection and no presumed safe `OUTSTR`
+   call from a frequent idle callback without verification.
+   The screen/cursor/editor state must be restored on K8;
+   throttle CRT writes if callbacks are frequent.
+5. Increment count on actual HP RMIDLE callbacks, not clock
+   interrupts or Teensy milliseconds; K1-K4 page/mode controls
+   must visibly coexist. No LST, HP-IB or forwarding until
+   callback chaining and CRT drawing are physically accepted.
+
+**Manual evidence:** The HP Assembler ROM Operating System section
+describes RAM hook assembly: from a ROM,
+`JSB =ROMJSB; DEF LABEL; VAL ROM#; RTN` (7 bytes); from
+a resident binary, `JSB =LABEL; RTN` (4 bytes).
+The manual does **not** promise that arbitrary chain trampolines
+or CRT output during RMIDLE are safe, so those remain engineering
+questions, not accepted capabilities. Hook source:
+`https://www.akso.de/fileadmin/Series_80/Assembler_ROM_Manual.pdf`.
+
+### Zero-modification preflight diagnostic
+
+Reading the existing hook's seven bytes is safe and needs no
+firmware reflash. At the HP BASIC command line, with no active
+`CMENU`/CPM capture:
+
+```basic
+FOR I=0 TO 6
+DISP I;PEEK(34076+I)
+NEXT I
+```
+
+The address `34076` is decimal for octal `102434` on HP-85A/B.
+Use the live output to determine which installed RMIDLE hook
+form needs to be preserved. This check is optional until the
+next native implementation is ready.
+
 ## 2026-10-25 — Clock/interrupt versus cooperative print service research
 
 **Finding:** The HP-85 has a millisecond system clock and three
