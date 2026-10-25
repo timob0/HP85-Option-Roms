@@ -24,7 +24,7 @@
 !       CPDCAT "A:"     ! read-only native BDOS directory catalog
 !       CPUI 0          ! native C1 console state + CRT, BASIC key pump
 !       CPUI K          ! deliver raw keyboard code from KBDKEY (C1 probe)
-!       C85MENU         ! C2a source-free RMIDLE status console + K1-K4 / K8
+!       CMENU         ! C2a source-free RMIDLE status console + K1-K4 / K8
 !       CPKTEST         ! DISABLED safe return after C2 hardware crash
 !       CPKCOUNT        ! compatibility diagnostic (0 in quarantined C2)
 !       CPKLAST         ! compatibility diagnostic (0 in quarantined C2)
@@ -79,7 +79,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPKTEST bounded native input probe
         DEF NOPARS    ! CPKCOUNT numeric diagnostic
         DEF NOPARS    ! CPKLAST numeric diagnostic
-        DEF NOPARS    ! C85MENU source-free console experiment
+        DEF NOPARS    ! CMENU source-free console experiment
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -117,7 +117,7 @@ ASCIIS  ASP "CPM"
         ASP "CPKTEST"
         ASP "CPKCOUNT"
         ASP "CPKLAST"
-        ASP "C85MENU"
+        ASP "CMENU"
 
 ERMSG   BYT 377
 
@@ -268,7 +268,7 @@ CPMRET  BIN
         RTN
 
 ! ---------------------------------------------------------------
-! C85MENU: C2a opt-in, source-free resident native console probe.
+! CMENU: C2a opt-in, source-free resident native console probe.
 ! Uses the same physically proven CHIDLE trampoline / EOJ2 and
 ! K8 detach as CPM. DOES NOT run any CPU-spinning HP loop.
 !
@@ -941,7 +941,7 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-MNMSG    ASP "C85MENU RMIDLE TEST - K8 EXITS"
+MNMSG    ASP "CMENU RMIDLE TEST - K8 EXITS"
 VERMSG   ASP "CPM85 0.06a RMIDLE PROBE"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
