@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.04c -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
+! CPM85 v0.04d -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -19,6 +19,7 @@
 !       CPDMNT "B:","WORK.DSK"  ! pending mount, relative to /cpm/disks
 !       CPDUMNT "B:" ! pending unmount
 !       CPRESET       ! activate desired mounts by Z80-only reset
+!       CPREBOOT      ! reboot ESP32 hardware (CP/M and Wi-Fi restart); HP-85 stays on
 !       CPDIMGS      ! list .DSK images in /cpm/disks
 !       CPDMK "WORK.DSK" ! create fresh 8 MiB disk on Teensy SD
 !       CPDCAT "A:"     ! read-only native BDOS directory catalog
@@ -66,6 +67,7 @@ PARSE   BYT 0,0
         DEF TWOSTR    ! CPDMNT
         DEF ONESTR    ! CPDUMNT
         DEF NOPARS    ! CPRESET
+        DEF NOPARS    ! CPREBOOT
         DEF NOPARS    ! CPDIMGS
         DEF ONESTR    ! CPDMK
         DEF ONESTR    ! CPDCAT
@@ -80,6 +82,7 @@ RUNTIM  BYT 0,0
         DEF CPDMNT
         DEF CPUMNT
         DEF CPRESE
+        DEF CPRBOT
         DEF CPIMGS
         DEF CPMAKE
         DEF CPCAT
@@ -94,6 +97,7 @@ ASCIIS  ASP "CPM"
         ASP "CPDMNT"
         ASP "CPDUMNT"
         ASP "CPRESET"
+        ASP "CPREBOOT"
         ASP "CPDIMGS"
         ASP "CPDMK"
         ASP "CPDCAT"
@@ -281,6 +285,10 @@ LSTFUN  BIN
 !
 ! CPSTATUS: no arguments
 ! CPRESET: explicitly resets ONLY Z80 (operator must be at CP/M prompt).
+! CPREBOOT: asks the Teensy to pulse ESP32 EN after its mailbox reply
+! is read by HP BASIC. Unlike CPRESET, Wi-Fi and all Z80 state restart,
+! but the original HP-85/Teensy processors keep running. Use at CP/M A>.
+! This command never depends on an ESP32 UART or Wi-Fi reply.
 ! CPDMNT / CPDUMNT / CPDMK: BASIC string expressions, not numeric parameters.
 ! ----------------------------------------------------------------------
 
@@ -297,6 +305,16 @@ CPRESE  BIN
         LDMD R14,=BINTAB
         JSB X14,CPCLR
         LDB R22,=4
+        JSB X14,CPGO
+        RTN
+
+! ESP32 full hardware restart, locally handled by the Teensy (opcode 8).
+! HP BASIC receives the acknowledgement before the EN pin is pulsed.
+        BYT 241
+CPRBOT  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        LDB R22,=8
         JSB X14,CPGO
         RTN
 
@@ -618,7 +636,7 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.04c DISK CONTROL"
+VERMSG   ASP "CPM85 0.04d DISK CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
