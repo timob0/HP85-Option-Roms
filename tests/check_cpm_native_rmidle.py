@@ -71,5 +71,5 @@ for n in ("200","201","202","203"):
     assert "CMB R22,="+n in key
 assert "JSB X14,KREL" in key
 assert "STBD R20,X14,RMDIRTY" in key
-assert "RMOWN" in s.split("INRESET",1)[1].split("INUNLD",1)[0]
+assert "RMOWN" in s.split("INRESET LDMD R14,=BINTAB",1)[1].split("INUNLD  LDMD",1)[0]
 print("PASS: native CMENU strict AUXROM361 chain, HP CRT only, bounded draw, K8 restore")
