@@ -1,3 +1,39 @@
+# RETIRED C2a — incorrect Teensy-rendered RMIDLE probe
+
+**Retired on 2026-10-25. DO NOT follow the build/flash/test instructions
+below.** The user correctly rejected this implementation as violating
+the intended architecture: the HP-85 itself must count RMIDLE callbacks
+and render the native CRT. EBTKS's `screenEmu` controls a separate
+optional CRT-mirroring implementation, not the native HP-85 console.
+
+**Observed hardware result:** `CMENU` gave no counter and K1-K4 appeared
+ineffective; K8 exited cleanly and the user's BASIC program was intact.
+The Teensy probe had been gated behind `get_screenEmu()` and did
+not display anything when `screenEmu` was false. This observation
+does not establish the HP's native RMIDLE callback frequency.
+
+**Repository recovery:** All new C2a Teensy CRT/RMIDLE files were
+deleted, and the modified Teensy code restored identically to
+`main` on `feature/cpm85-hpib-output`. The HP repo's
+Teensy-dependent `CMENU` command was withdrawn, reverting CPM85
+`src/cpm85.asm` to the quarantined v0.05c/C1 source.
+No user hardware update needed now; the current flashed v0.06a
+`CMENU` image remains an obsolete experiment. Prefer the
+physically accepted C1 v0.05a LOADBIN for ongoing use.
+
+**Replacement design requirement:** entirely HP-native keyboard/UI
+handling and count/display, with **correct chaining of the existing
+EBTKS AUXROM RMIDLE hook**. Do not overwrite that hook. The
+HP Assembler ROM documentation describes 7-byte RMIDLE hook forms,
+but exact save/execute/restore handling and an appropriate
+CRT-coordinate/overlay service need to be verified before generating
+another hardware binary. Printer output remains disabled. See
+`docs/CPM85_NATIVE_CONSOLE_RESEARCH.md`.
+
+---
+
+## Historical (retracted) instructions — do not execute
+
 # C2a native HP-85 RMIDLE console probe — joint HP LOADBIN + Teensy test
 
 **Status:** compiled / CI checked, PHYSICAL HP-85 TEST PENDING.
