@@ -314,7 +314,7 @@ CPRESE  BIN
 CPRBOT  BIN
         LDMD R14,=BINTAB
         JSB X14,CPCLR
-        LDB R22,=8
+        LDB R22,=10       ! Octal 10 = decimal 8, Teensy-local ESP32 reboot
         JSB X14,CPGO
         RTN
 
