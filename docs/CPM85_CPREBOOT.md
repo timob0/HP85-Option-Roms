@@ -1,7 +1,6 @@
 # CPM85 v0.04d — HP-85 `CPREBOOT` (ESP32-only hardware reset)
 
-Status: **implemented on the existing Teensy B2c branch and HP CPM85
-LOADBIN feature branch; full firmware/HP assembly builds and physical tests pending**. No ESP32 source or firmware change is required.
+Status (2026-10-26): **CPREBOOT physically accepted on the HP-85.** User verified `CPVER` reports `0.04d` and `CPREBOOT` restarts the ESP32 as intended. The matching Teensy change is already merged into existing `feature/cpm-file-transfer-b2c` by PR #5. No ESP32 firmware modification is required. `CPRESET` regression and B2c file-transfer acceptance are separate outstanding checks; none of the three `main` branches has been changed.
 
 ## Motivation
 
@@ -64,9 +63,10 @@ CPREBOOT
 
 ## Build / installation checklist
 
-**Do not flash until the Teensy native test, Teensy firmware build and
-HP CAPASM/CAPLIF validation pass.** Preserve current known-good firmware,
-loadbin file and writable disk images.
+The HP-85 hardware test has now passed for `CPREBOOT`. The following are
+repeatable build/recovery instructions, not a request to reinstall the
+already tested code. Preserve current known-good firmware, LOADBIN and
+writable disk images.
 
 Teensy:
 
@@ -94,13 +94,16 @@ mkdir -p build
 
 The isolated CPREBOOT mailbox native harness compiled successfully with
 `g++ -std=c++17 -Wall -Wextra -Werror -pedantic` during this review;
-full PlatformIO and CAPASM/CAPLIF builds still require validation.
+the user's CAPASM source error (`LDB R22,=8`, illegal bare-octal 8) was
+corrected to `=10`, and the user subsequently reported the working v0.04d
+LOADBIN and `CPREBOOT` on physical hardware. No independent full CI result
+has been verified here.
 
 Use the established HP-85 LOADBIN transport to load the newly built
 `CPM85.dat`, unloading the previous CPM85 if required. Verify
 `CPVER` displays `CPM85 0.04d DISK CONTROL`.
 
-First physical test:
+Previously completed physical test (repeat only if needed):
 1. Safely stop any CP/M file I/O; verify `A>`; detach HP keyboard via
    K8 so BASIC accepts commands.
 2. At HP BASIC: `CPREBOOT`.
@@ -111,6 +114,11 @@ First physical test:
 5. Recheck Web updater, CP/M DIR, HP CPDCAT, modem, and /api/system/health
    if Wi-Fi comes back.
 6. Re-test `CPRESET` separately: it must *not* restart Wi-Fi/Web.
+
+**Confirmed by user:** `CPVER` returned `0.04d` and `CPREBOOT` worked
+as expected. The initial `0.05c` reading came from an old SD copy of
+`CPM85.DAT`; `deploy.sh` now also copies `build/CPM85.dat` to the SD root.
+`CPRESET` preserving Wi-Fi still awaits an explicit regression report.
 
 If the old Teensy firmware is accidentally retained, opcode 8 is
 unsupported and the HP statement will time out safely; existing
