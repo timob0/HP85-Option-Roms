@@ -7,6 +7,66 @@ keyboard pump in a separate BASIC test program). The C2 v0.05b foreground
 KEYHIT polling experiment physically crashed; v0.05c quarantines it.
 Do **not** rerun v0.05b `CPKTEST`.
 
+## Physical RMIDLE hook decoded (2026-10-25, user HP-85)
+
+The user inspected all 7 bytes from **decimal addresses 34076–34082**
+(octal `0102434`–`0102442`) at the HP BASIC prompt:
+
+```
+206 254 9 51 103 241 158       (decimal)
+316 376 011 063 147 361 236   (octal)
+```
+
+The exact instruction sequence is:
+
+```asm
+        JSB =ROMJSB           ! 316, 376, 011 -> 04776(oct)
+        DEF 063463            ! 063, 147 -> 063463(oct), little endian
+        BYT 361               ! 241 decimal = ROM 361(oct)
+        RTN                   ! 236(oct) = 158 decimal
+```
+
+**Verified conclusion:** The HP EXEC's RMIDLE hook is occupied by a
+standard **ROMJSB to AUXROM 361, entry 063463 octal**, with the final
+return to HP firmware. ROM 361 is the primary EBTKS/AUXROM module;
+see `https://www.fliptronics.com/EBTKS/AUXROMs_Internals.html`.
+The exact 7-byte format matches the HP Assembler ROM manual
+Section 3: Operating System (RAM hooks). This is *not* a free hook
+and not safe to overwrite without faithfully executing the existing
+handler. This observation does **not yet establish** native hook
+calling frequency, stack/register ABI of a wrapper, or whether CRT
+drawing is safe during a callback.
+
+**Proposed next all-HP-native code design (still unimplemented):**
+
+1. Source-free LOADBIN console uses physically validated CHIDLE
+   attach/K1-K4/K8 release for keyboard capture.
+2. At console entry, require the exact supported ROMJSB+DEF+ROM+RTN
+   RMIDLE pattern (initially accept ONLY the exact physical bytes
+   above); copy **all 7 bytes to a private executable RAM slot**
+   before modifying the live hook. Retain those bytes throughout
+   the session. Reject unknown or changing ownership; never blindly
+   chain an unfamiliar stub.
+3. Install a bounded **RAM RMIDLE trampoline**, safely calling the
+   original saved seven-byte hook via relocated `JSB X14,<saved>`
+   (after validating that RAM executes the copied ROMJSB descriptor
+   with its existing ROM-switching/return semantics), then increment
+   a private HP RAM counter without overwriting interpreter state.
+   Keep all EBTKS AUXROM mailbox/autostart functionality intact.
+4. Separate the frequency counter from its **visual output**: prove
+   chaining and safe K8/RESET/unload restoration first with an
+   exposed counter, then implement a throttled HP-native CRT
+   field using verified firmware CRT entry points or carefully
+   guarded hardware CRT access. No Teensy video DMA/screenEmu.
+5. Before leaving the session, compare the live hook against the
+   exact bytes installed by our module, restore the saved original
+   seven bytes only if still owned, then release CHIDLE as usual.
+   Avoid running printer code in the experimental callback.
+
+This narrows the next implementation to precise local RAM-hook
+chaining rather than guessing what EBTKS placed at RMIDLE.
+No firmware source was changed in this read-only diagnostic step.
+
 ## 2026-10-25 — Architectural correction: HP-native RMIDLE and CRT only
 
 The user rejected the C2a implementation because it incorrectly
