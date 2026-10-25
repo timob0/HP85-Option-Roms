@@ -194,7 +194,15 @@ INLOAD  LDMD R14,=BINTAB
         RTN
 
 INRESET LDMD R14,=BINTAB
-        CLB R20
+! If RESET happened during the experimental menu, stop Teensy's
+! status redraw without restoring the pre-RESET CRT snapshot.
+! Value 4 is ignored by the legacy Cpm85Keys bridge.
+        LDBD R20,X14,KHACT
+        CMB R20,=2
+        JNZ INRSKP
+        LDB R20,=4
+        STBD R20,=CPCTL
+INRSKP  CLB R20
         STBD R20,X14,KHACT
         STBD R20,X14,UIACT
         RTN
