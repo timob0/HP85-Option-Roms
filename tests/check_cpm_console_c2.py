@@ -10,7 +10,7 @@ import re
 asm=(Path(__file__).resolve().parents[1] / "src" / "cpm85.asm").read_text()
 names=re.findall(r'^\s*ASP "([A-Z]+)"',
                  asm.split("ASCIIS  ",1)[1].split("\n\nERMSG",1)[0],re.M)
-assert names[-4:]==["CPKTEST","CPKCOUNT","CPKLAST","CMENU"],names
+assert names[-3:]==["CPKTEST","CPKCOUNT","CPKLAST"],names
 runtime=asm.split("RUNTIM  BYT 0,0",1)[1].split("ASCIIS  ",1)[0]
 for n in ("K2RUN","K2CNT","K2LST"):
     assert "DEF "+n in runtime
@@ -20,7 +20,7 @@ assert "LDM R26,=K2STOP" in disabled
 assert "JSB =OUTSTR" in disabled
 assert "BIN\n        PAD\n        RTN" in disabled
 assert 'K2STOP  ASP "CPKTEST DISABLED - SEE C2 DOC"' in asm
-assert 'VERMSG   ASP "CPM85 0.06a RMIDLE PROBE"' in asm
+assert 'VERMSG   ASP "CPM85 0.05c C2 DISABLED"' in asm
 assert re.search(r"BYT 0,55\s+K2CNT\s+BIN",block)
 assert re.search(r"BYT 0,55\s+K2LST\s+BIN",block)
 for old in ("K2ARM","K2POLL","K2RELD","K2SEEN","K2KEY",
