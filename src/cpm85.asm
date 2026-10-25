@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.05c -- C2 unsafe native keyboard experiment disabled after HP crash
+! CPM85 v0.06b -- native RMIDLE chain & HP CRT console hardware probe
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -27,6 +27,7 @@
 !       CPKTEST         ! DISABLED safe return after C2 hardware crash
 !       CPKCOUNT        ! compatibility diagnostic (0 in quarantined C2)
 !       CPKLAST         ! compatibility diagnostic (0 in quarantined C2)
+!       CMENU           ! HP-native RMIDLE, CRT and CHIDLE probe (no Teensy code)
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -78,6 +79,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPKTEST bounded native input probe
         DEF NOPARS    ! CPKCOUNT numeric diagnostic
         DEF NOPARS    ! CPKLAST numeric diagnostic
+        DEF NOPARS    ! CMENU native RMIDLE screen/counter
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -96,6 +98,7 @@ RUNTIM  BYT 0,0
         DEF K2RUN
         DEF K2CNT
         DEF K2LST
+        DEF MNRUN
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -114,6 +117,7 @@ ASCIIS  ASP "CPM"
         ASP "CPKTEST"
         ASP "CPKCOUNT"
         ASP "CPKLAST"
+        ASP "CMENU"
 
 ERMSG   BYT 377
 
@@ -187,12 +191,14 @@ INLOAD  LDMD R14,=BINTAB
         STBD R20,X14,UIPAGE
         STBD R20,X14,K2COUNT
         STBD R20,X14,K2LAST
+        STBD R20,X14,RMOWN
         RTN
 
 INRESET LDMD R14,=BINTAB
         CLB R20
         STBD R20,X14,KHACT
         STBD R20,X14,UIACT
+        STBD R20,X14,RMOWN
         RTN
 
 INUNLD  LDMD R14,=BINTAB
@@ -260,6 +266,105 @@ CPBUSY  LDM R26,=BSYMSG
         JSB =OUTSTR
 
 CPMRET  BIN
+        PAD
+        RTN
+
+! --------------------------------------------------------------
+! CMENU: experimental native-only resident console. Source-free:
+! returns to HP editor immediately; never blocks waiting for keys.
+! Only hook on physical documented AUXROM 361 RMIDLE signature.
+! No EBTKS/ESP port writes, no printer. K8 restores both hooks.
+! --------------------------------------------------------------
+        BYT 241
+MNRUN   SAD
+        BIN
+        LDMD R14,=BINTAB
+        LDBD R20,X14,KHACT
+        CMB R20,=0
+        JZR MNKOK
+        JSB =ERRORP
+        BYT 89D
+MNKOK   LDBD R20,=CHIDLE
+        CMB R20,=236
+        JZR MNCHK
+        JSB =ERRORP
+        BYT 89D
+
+! Refuse any unfamiliar RMIDLE layout; do not alter existing AUXROM.
+MNCHK   LDM R34,=RMIDLE
+        LDM R36,=RMPATT
+        ADM R36,R14
+        LDM R40,=RMSAVE
+        ADM R40,R14
+        LDB R20,=7
+MNCOMP  POBD R22,+R34
+        POBD R23,+R36
+        CMB R22,R23
+        JZR MNSAV
+        JSB =ERRORP
+        BYT 89D
+MNSAV   PUBD R22,+R40
+        DCB R20
+        JNZ MNCOMP
+
+! Copy fixed 32-char overlay to private executable LOADBIN RAM.
+        LDMD R14,=BINTAB
+        LDM R34,=RMTMPL
+        ADM R34,R14
+        LDM R36,=RMLINE
+        ADM R36,R14
+        LDB R20,=32D
+MNCOPY  POBD R22,+R34
+        PUBD R22,+R36
+        DCB R20
+        JNZ MNCOPY
+        LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,RMTICK
+        STBD R20,X14,RMMODE
+        LDB R20,=1
+        STBD R20,X14,RMPAGE
+        STBD R20,X14,RMDIRTY
+
+! Install CHIDLE first using physically verified CPMRUN stub.
+        LDM R34,=CHIDLE
+        LDM R36,=KHSAVE
+        ADM R36,R14
+        LDB R20,=7
+MNKSAV  POBD R22,+R34
+        PUBD R22,+R36
+        DCB R20
+        JNZ MNKSAV
+        LDMD R14,=BINTAB
+        LDM R46,=KHOOK
+        ADM R46,R14
+        STM R46,R45
+        LDB R47,=236
+        LDB R44,=316
+        STMD R44,=CHIDLE
+
+! Install 4-byte RMIDLE JSB <our RAM trampoline> / RTN.
+! Direct CPU execution is serialized: EXEC calls RMIDLE only after
+! the LOADBIN MNRUN statement returns. Original 7 bytes saved.
+        LDMD R14,=BINTAB
+        LDM R46,=RMHOOK
+        ADM R46,R14
+        STMD R46,X14,RMADDR
+        STM R46,R45
+        LDB R47,=236
+        LDB R44,=316
+        STMD R44,=RMIDLE
+        LDB R20,=1
+        STBD R20,X14,RMOWN
+        LDB R20,=2
+        STBD R20,X14,KHACT
+
+! Native CRT output before returning to editor; no BASIC program loaded.
+        LDM R26,=MNMSG
+        ADMD R26,=BINTAB
+        LDM R36,=31D,0
+        JSB =OUTSTR
+        BIN
         PAD
         RTN
 
@@ -789,6 +894,131 @@ K2LST   BIN
         PUMD R40,+R12
         RTN
 
+! --------------------------------------------------------------
+! RMHOOK: HP EXEC RMIDLE callback, invoked through our RAM hook.
+!
+! VERY IMPORTANT: Preserve scratch registers R10..R47 before
+! instrumentation; RESTORE before invoking saved 7-byte AUXROM hook.
+! The original ROMJSB therefore owns the final return/status flags.
+! In particular, never call OUTSTR or any printer/BASIC interpreter
+! routine in this callback, and never busy-wait on KEYHIT.
+!
+! Native CRT update is a small bounded direct CRT controller write
+! to alpha row 2, performed after 256 RMIDLE callbacks or a key.
+! --------------------------------------------------------------
+RMHOOK  BIN
+        PUMD R10,+R6
+        PUMD R20,+R6
+        PUMD R30,+R6
+        PUMD R40,+R6
+        LDMD R14,=BINTAB
+
+! Three ASCII decimal digits 000..999 counted per callback.
+        LDBD R20,X14,RMDIG0
+        ICB R20
+        CMB R20,=72
+        JNZ RMONE
+        LDB R20,=60
+        STBD R20,X14,RMDIG0
+        LDBD R20,X14,RMDIG1
+        ICB R20
+        CMB R20,=72
+        JNZ RMTEN
+        LDB R20,=60
+        STBD R20,X14,RMDIG1
+        LDBD R20,X14,RMDIG2
+        ICB R20
+        CMB R20,=72
+        JNZ RMHUND
+        LDB R20,=60
+RMHUND  STBD R20,X14,RMDIG2
+        JMP RMTHR
+RMTEN   STBD R20,X14,RMDIG1
+        JMP RMTHR
+RMONE   STBD R20,X14,RMDIG0
+
+RMTHR   LDBD R20,X14,RMTICK
+        ICB R20
+        STBD R20,X14,RMTICK
+        JZR RMPAINT
+        LDBD R20,X14,RMDIRTY
+        CMB R20,=0
+        JZR RMCHAIN
+RMPAINT JSB X14,RMDRAW
+        LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,RMDIRTY
+
+RMCHAIN POMD R40,-R6
+        POMD R30,-R6
+        POMD R20,-R6
+        POMD R10,-R6
+
+! Execute the unchanged seven-byte previous hook in relocated RAM.
+! Saved: JSB =ROMJSB; DEF 063463; BYT 361; RTN.
+! It must execute LAST so AUXROM controls returned E/status exactly
+! as it did before this module was installed.
+        LDMD R14,=BINTAB
+        JSB X14,RMSAVE
+        RTN
+
+! RM native alpha-line painter. CRTBAD accepts 2 consecutive writes
+! to the same I/O address (lo then hi nibble pointer); CRTDAT auto
+! advances two nibbles per character. All busy polls are bounded.
+! Restore hardware CRTBAD from firmware's CRTBYT when done.
+RMDRAW  LDMD R14,=BINTAB
+        LDBD R20,=CRTWRS
+        ANB R20,=200
+        JNZ RMDRET
+
+! Patch private ASCII line: digits at offset 7..9, page 16, mode 23.
+        LDM R34,=RMLINE
+        ADM R34,R14
+        ADM R34,=7D,0
+        LDBD R22,X14,RMDIG2
+        PUBD R22,+R34
+        LDBD R22,X14,RMDIG1
+        PUBD R22,+R34
+        LDBD R22,X14,RMDIG0
+        PUBD R22,+R34
+        LDM R34,=RMLINE
+        ADM R34,R14
+        ADM R34,=16D,0
+        LDBD R22,X14,RMPAGE
+        ADB R22,=60
+        PUBD R22,+R34
+        LDM R34,=RMLINE
+        ADM R34,R14
+        ADM R34,=23D,0
+        LDBD R22,X14,RMMODE
+        ADB R22,=60
+        PUBD R22,+R34
+
+! The HP alpha CRT uses 32 columns, two-nibble character addresses.
+! Compute visible row 2 start as CRTRAM + 2*32*2 = 0200 oct.
+        LDMD R40,=CRTRAM
+        ADM R40,=200,0
+        STBD R40,=CRTBAD
+        STBD R41,=CRTBAD
+        LDM R34,=RMLINE
+        ADM R34,R14
+        LDB R30,=32D
+RMDLOOP LDB R31,=377
+RMDWAIT LDBD R20,=CRTSTS
+        ANB R20,=200
+        JZR RMDWR
+        DCB R31
+        JNZ RMDWAIT
+        JMP RMDRST
+RMDWR   POBD R22,+R34
+        STBD R22,=CRTDAT
+        DCB R30
+        JNZ RMDLOOP
+RMDRST  LDMD R40,=CRTBYT
+        STBD R40,=CRTBAD
+        STBD R41,=CRTBAD
+RMDRET  RTN
+
 ! KREL: restore all 7 CHIDLE bytes if this module owns the hook.
 ! Called by BASIC CPOFF, LOAD/SCRATCH unload, or from K8 processing.
 KREL    BIN
@@ -796,6 +1026,35 @@ KREL    BIN
         LDBD R20,X14,KHACT
         CMB R20,=0
         JZR KRRET
+
+! FIRST detach our RMIDLE hook only when it still points at us.
+        LDBD R20,X14,RMOWN
+        CMB R20,=0
+        JZR KRKEY
+        LDM R34,=RMIDLE
+        POBD R22,+R34
+        CMB R22,=316
+        JNZ KRKEY
+        LDBD R22,+R34
+        LDBD R23,+R34
+        LDMD R24,X14,RMADDR
+        CMM R22,R24
+        JNZ KRKEY
+        LDBD R22,+R34
+        CMB R22,=236
+        JNZ KRKEY
+        LDM R34,=RMSAVE
+        ADM R34,R14
+        LDM R36,=RMIDLE
+        LDB R20,=7
+KRREST  POBD R22,+R34
+        PUBD R22,+R36
+        DCB R20
+        JNZ KRREST
+        LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,RMOWN
+KRKEY   LDMD R14,=BINTAB
 ! Detach from Teensy without consulting/awaiting the ESP32.
         CLB R22
         STBD R22,=CPCTL
@@ -826,9 +1085,41 @@ KHOOK   BIN
         STBD R20,X14,KCOUNT
         CMB R22,=207
         JZR KHEXIT
+        LDBD R20,X14,KHACT
+        CMB R20,=2
+        JZR MKEY
 ! One short, write-only 8-bit I/O cycle; the Teensy ISR only queues
 ! the byte, never does storage/UART work in the HP keyboard hook.
         STBD R22,=CPKEY
+        JMP KHCAPT
+
+! CMENU mode: K1-3 pages; K4 toggle mode; other keys stay local.
+MKEY    CMB R22,=200
+        JNZ MK2
+        LDB R20,=1
+        JMP MKPAGE
+MK2     CMB R22,=201
+        JNZ MK3
+        LDB R20,=2
+        JMP MKPAGE
+MK3     CMB R22,=202
+        JNZ MK4
+        LDB R20,=3
+MKPAGE  STBD R20,X14,RMPAGE
+        LDB R20,=1
+        STBD R20,X14,RMDIRTY
+        JMP KHCAPT
+MK4     CMB R22,=203
+        JNZ KHCAPT
+        LDBD R20,X14,RMMODE
+        CMB R20,=0
+        JZR MKON
+        CLB R20
+        JMP MKSET
+MKON    LDB R20,=1
+MKSET   STBD R20,X14,RMMODE
+        LDB R20,=1
+        STBD R20,X14,RMDIRTY
 
 ! Consume an ordinary key and return to BASIC's key-wait loop.
 KHCAPT  CLE
@@ -865,9 +1156,23 @@ UIMODE  BSZ 1           ! 0=management,1=simulated CP/M control
 UIPAGE  BSZ 1           ! 1=drives,2=devices,3=system
 K2COUNT BSZ 1           ! quarantined probe count, 0
 K2LAST  BSZ 1           ! quarantined probe last code, 0
+RMOWN   BSZ 1           ! native RMIDLE hook ownership
+RMADDR  BSZ 2           ! installed trampoline pointer, for K8 compare
+RMSAVE  BSZ 7           ! original executable ROM361 hook copied verbatim
+RMTICK  BSZ 1           ! CRT repaint every 256 RMIDLE invocations
+RMDIRTY BSZ 1           ! forced redraw from native key handler
+RMPAGE  BSZ 1           ! 1/2/3 page
+RMMODE  BSZ 1           ! 0 management, 1 simulated Control
+RMDIG0  BYT 60          ! ASCII decimal units, initial 0
+RMDIG1  BYT 60          ! tens
+RMDIG2  BYT 60          ! hundreds
+RMLINE  BSZ 32D         ! private editable native CRT overlay
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
+RMPATT  BYT 316,376,11,63,147,361,236
+RMTMPL  ASP "RMIDLE:000 PAGE:1 MODE:0 K8 EXIT"
+MNMSG   ASP "CMENU NATIVE RMIDLE - K8 RETURNS"
 K2STOP  ASP "CPKTEST DISABLED - SEE C2 DOC"
 UITITLE ASP "CPM85 CONSOLE C1 (NATIVE)"
 UIMENU  ASP "K1-3 PAGES K4 CPM K8 EXIT"
@@ -881,16 +1186,23 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.05c C2 DISABLED"
+VERMSG   ASP "CPM85 0.06b NATIVE RMIDLE"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
-VERLEN  EQU 23D
+VERLEN  EQU 25D
 
 ! HP-85 addresses, all OCTAL (copied from tested PRINTER85 LOADBIN).
 BINTAB  DAD 101233
 ROMFL   DAD 101231
 CHIDLE  DAD 102416
+RMIDLE  DAD 102434
+CRTWRS  DAD 101016
+CRTRAM  DAD 100200
+CRTBYT  DAD 100176
+CRTBAD  DAD 177405
+CRTSTS  DAD 177406
+CRTDAT  DAD 177407
 KEYHIT  DAD 100671
 EOJ2    DAD 34772
 CPKEY   DAD 177741     ! EBTKS keyboard data I/O port
