@@ -960,8 +960,7 @@ RMCHAIN POMD R40,-R6
 ! clobbering the caller's R14 just to locate our saved bytes.
 ! ROM361 runs last and owns the final E/status as before our hook.
         JSB =ROMJSB
-        DEF 63463
-        BYT 361
+        BYT 63,147,361     ! exact HP ROMJSB descriptor: 063463, ROM361
         RTN
 
 ! RM native alpha-line painter. CRTBAD accepts 2 consecutive writes
@@ -970,7 +969,7 @@ RMCHAIN POMD R40,-R6
 ! Restore hardware CRTBAD from firmware's CRTBYT when done.
 RMDRAW  LDMD R14,=BINTAB
         LDBD R20,=CRTWRS
-        ANB R20,=200
+        ANM R20,=200
         JNZ RMDRET
 
 ! Patch private ASCII line: digits at offset 7..9, page 16, mode 23.
@@ -1007,7 +1006,7 @@ RMDRAW  LDMD R14,=BINTAB
         LDB R30,=32D
 RMDLOOP LDB R31,=377
 RMDWAIT LDBD R20,=CRTSTS
-        ANB R20,=200
+        ANM R20,=200
         JZR RMDWR
         DCB R31
         JNZ RMDWAIT
@@ -1037,12 +1036,12 @@ KREL    BIN
         POBD R22,+R34
         CMB R22,=316
         JNZ KRKEY
-        LDBD R22,+R34
-        LDBD R23,+R34
+        POBD R22,+R34
+        POBD R23,+R34
         LDMD R24,X14,RMADDR
         CMM R22,R24
         JNZ KRKEY
-        LDBD R22,+R34
+        POBD R22,+R34
         CMB R22,=236
         JNZ KRKEY
         LDM R34,=RMSAVE
