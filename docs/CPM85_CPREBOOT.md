@@ -1,7 +1,7 @@
 # CPM85 v0.04d — HP-85 `CPREBOOT` (ESP32-only hardware reset)
 
-Status: **implemented on two feature branches; local build and physical HP-85
-tests pending**. No ESP32 source or firmware change is required.
+Status: **implemented on the existing Teensy B2c branch and HP CPM85
+LOADBIN feature branch; full firmware/HP assembly builds and physical tests pending**. No ESP32 source or firmware change is required.
 
 ## Motivation
 
@@ -54,7 +54,10 @@ CPREBOOT
 - `timob0/HP85-Option-Roms`:
   **`feature/cpm85-esp-reboot`** (CPM85 v0.04d LOADBIN)
 - `timob0/ebtks-alt-firmware`:
-  **`feature/cpm85-esp-reboot`** (from the Teensy B2c transfer branch)
+  **`feature/cpm-file-transfer-b2c`** (CPREBOOT merged from the
+  temporary feature branch in [PR #5](https://github.com/timob0/ebtks-alt-firmware/pull/5),
+  merge commit `3fb5e73e`). The temporary branch is now redundant but
+  has not been deleted.
 - `timob0/EBTKS-Z80-Emulator`: **unchanged**. Use the accepted
   ESP32 build already installed.
 - All `main` branches are unchanged.
@@ -69,7 +72,7 @@ Teensy:
 
 ```bash
 git fetch origin
-git switch feature/cpm85-esp-reboot
+git switch feature/cpm-file-transfer-b2c
 git pull --ff-only
 pio run -e teensy41
 ```
@@ -88,6 +91,10 @@ mkdir -p build
 ./py311/bin/capasm src/cpm85.asm -b build/CPM85.bin -l build/CPM85.lst -r 2 -c
 ./py311/bin/caplif build/CPM85.bin -l build/CPM85.dat -f CPM85
 ```
+
+The isolated CPREBOOT mailbox native harness compiled successfully with
+`g++ -std=c++17 -Wall -Wextra -Werror -pedantic` during this review;
+full PlatformIO and CAPASM/CAPLIF builds still require validation.
 
 Use the established HP-85 LOADBIN transport to load the newly built
 `CPM85.dat`, unloading the previous CPM85 if required. Verify
