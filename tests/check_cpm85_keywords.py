@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT", "CPUI", "CPKTEST", "CPKCOUNT", "CPKLAST", "C85MENU"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT", "CPUI", "CPKTEST", "CPKCOUNT", "CPKLAST", "CMENU"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
