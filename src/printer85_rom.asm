@@ -1,12 +1,16 @@
 ! ============================================================
-! PRINTER85 v0.03b RC1b -- HP-85 OPTION ROM
+! PRINTER85 v0.03b RC1c -- HP-85 OPTION ROM
 !
 ! v0.03b RC1b is an assembler-corrected architectural refactor of the hardware-verified v0.03a
 ! RC1a common text/key-panel build.  It introduces a table-driven printer
 ! driver interface so printer-specific control sequences and behavior can be
 ! added as self-contained driver blocks without changing the PRINTER85 core.
 !
-! Public behavior is intended to remain unchanged from v0.03a RC1a.
+! RC1c: SII/CAPD345 SHIFT+PAPER ADVANCE issues a single full paper cut.
+!       Normal PAPER ADVANCE still feeds individual lines; ThinkJet SHIFT+PAPER
+!       retains its previous form-feed behavior.  Hardware validation pending.
+!
+! Other public behavior is intended to remain unchanged from v0.03a RC1a.
 !
 ! RC1a fixed the 22 CAPASM parser errors in RC1.  RC1b additionally avoids the
 ! one remaining out-of-range relative JMP in DRVKEY by calling DRVGO with a
@@ -1141,7 +1145,8 @@ KHPREP  JSB =HCLINE
         JNZ KHPREP
         JMP KHPCLS
 
-! SHIFT+PAPER ADVANCE: one page-advance command only; no repeat.
+! SHIFT+PAPER ADVANCE: one driver-specific secondary paper operation, no repeat.
+! ThinkJet retains FF; SII/CAPD345 now performs a feed-to-cutter + full cut.
 
 KHPPAG  JSB =HCPAGE
         JSB =KHREL
@@ -3557,7 +3562,7 @@ SIDESC  BYT 2                   ! driver id
         DEF SIBLD
         DEF SIUND
         DEF SILINE
-        DEF SIPAGE
+        DEF SIPAGE             ! SHIFT+PAPER: SII autocutter (not form feed)
         DEF SITCLS
         DEF SIGCLS
         DEF SIGRPH
@@ -3645,8 +3650,16 @@ SILINE  LDM R30,=1,0
         JSB =HPOUT
         RTN
 
+! SHIFT+PAPER: flush any pending print line with zero additional feed, then
+! move only to the cutter position and perform a full cut (GS V 65 0).
+! An explicit line start is required for GS V in standard mode.  No FF/page
+! feed is sent; normal PAPER ADVANCE remains SILINE (one LF with key repeat).
+!
 SIPAGE  LDM R30,=3D,0
-        LDM R32,=SIIPG
+        LDM R32,=SIIJ0
+        JSB =HPOUT
+        LDM R30,=4D,0
+        LDM R32,=SIICUT
         JSB =HPOUT
         RTN
 
@@ -3682,7 +3695,7 @@ SIUN1   BYT 33,55,1
 SILP6   BYT 33,62
 SILP8   BYT 33,63,31
 
-SIIPG   BYT 33,144,102          ! ESC d 66 decimal (0102 octal)
+SIICUT  BYT 35,126,101,0      ! GS V 65 0 decimal: feed to cutter + full cut
 
 
 ! ------------------------------------------------------------
@@ -4172,7 +4185,7 @@ DRVTAB  DEF TJDESC
 DRVNOP  RTN
 
 
-HMSG    ASC "PRINTER85 0.03B RC1B"
+HMSG    ASC "PRINTER85 0.03B RC1C"
 
 ! ------------------------------------------------------------
 ! COMMON native K-key labels -- exactly 8 bytes each.
