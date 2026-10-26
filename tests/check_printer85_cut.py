@@ -4,6 +4,14 @@ from pathlib import Path
 
 source = Path("src/printer85_rom.asm").read_text()
 assert 'HMSG    ASC "PRINTER85 0.03B RC1C"' in source
+
+# PVER passes an explicit byte count to OUTSTR: include the complete
+# version suffix rather than truncating RC1B/RC1C to indistinguishable RC1.
+import re
+version = re.search(r'^HMSG\s+ASC "([^"]+)"', source, re.MULTILINE).group(1)
+pver = source.split("PVER.   LDM R26,=HMSG", 1)[1].split("JSB =OUTSTR", 1)[0]
+count = int(re.search(r'LDM R36,=(\d+)D,0', pver).group(1))
+assert count == len(version), (count, version)
 assert 'SIDESC  BYT 2' in source
 assert 'DEF SIPAGE             ! SHIFT+PAPER: SII autocutter' in source
 
