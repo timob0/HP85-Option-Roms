@@ -362,7 +362,7 @@ PNERR   POBD R47,-R6
 
 PVER.   LDM R26,=HMSG
 
-        LDM R36,=19D,0
+        LDM R36,=20D,0          ! print all 20 characters, including RC suffix
 
         JSB =OUTSTR
 
