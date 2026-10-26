@@ -1,1 +1,6 @@
 py311/
+.DS_Store
+*.lst
+*.bin
+*.dat
+
