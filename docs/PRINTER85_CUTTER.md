@@ -1,4 +1,4 @@
-# PRINTER85 RC1c — CAPD345 cutter: IFD501 command verified, hardware setup pending
+# PRINTER85 RC1c — CAPD345 cutter: verified on physical hardware
 
 ## Scope
 * Source: `src/printer85_rom.asm`; ROM 0241, SII driver 2 (IFD501 / CAPD345).
@@ -20,11 +20,15 @@ SIICUT  BYT 35,126,101,0
 ```
 This choice avoids the former SII `ESC d 66` page advance. **The exact command is explicitly documented for the IFD501** in its Technical Reference, Chapter 8, page 8-77 (PDF page 135). `GS V 65 0` is syntactically valid for an IFD501 and is explicitly described as cutting with `n=0`. No new PRINTER85 assembly patch is necessary to try the cutter after it has been enabled.
 
+## Hardware verification (2026-10-27)
+
+**PASS — physical HP-85 + PRINTER85 0.03b RC1c + IFD501-01UK-E/CAPD345:** The user confirmed `PVER` reports RC1c. Initially, SHIFT+PAPER ADVANCE produced no motion because the IFD501's autocutter option was disabled. The user connected the controller to a Windows machine, enabled the autocutter with the Seiko Windows configuration tool, and left all other software DIP switch settings unchanged. Those settings persisted permanently in the printer controller. Returning to the existing HP-85 setup, SHIFT+PAPER ADVANCE successfully executed a **full paper cut**, without a ROM change. This closes the cutter-command hardware acceptance test. Other PRINTER85 regression checks remain independently scoped.
+
 ## Critical hardware precondition: cutter selection
 
 The IFD501 can silently ignore the cutter if **SWDIP1-1 Autocutter Selection** is set to `1` (Disable). `0` means Enable. The factory-default value in the table (Chapter 6, page 6-8 / PDF page 47) is **Disable**.
 
-This also precisely predicts RC1c's observed symptom: the Technical Reference says `GS V 65 n` performs *only* feed when cutting is disabled. Because PRINTER85 transmits `n=0`, neither feed nor cut occurs. The verified RC1c `PVER` reads `PRINTER85 0.03B RC1C`; the first on-device Shift+Paper test produced no motion.
+This also precisely predicts RC1c's observed symptom: the Technical Reference says `GS V 65 n` performs *only* feed when cutting is disabled. Because PRINTER85 transmits `n=0`, neither feed nor cut occurs. The verified RC1c `PVER` reads `PRINTER85 0.03B RC1C`; the first on-device Shift+Paper test produced no motion. **After SWDIP1-1 was enabled, SHIFT+PAPER ADVANCE successfully performed the full cut on the actual CAPD345/IFD501 hardware.**
 
 **Safe setup path (printer attached directly to a compatible Windows PC via IFD501 USB):**
 1. Ensure the CAPD345 cutter's FPC cable is connected to **IFD501 connector CN3** (Technical Reference §3.3), with printer power **off** while connecting/disconnecting.
@@ -51,9 +55,9 @@ From repository root, with the existing CAPASM/CAPROM environment:
 ./py311/bin/caprom build/ROM241.bin -r build/ROM241.rom -s 8
 python3 tests/check_printer85_cut.py
 ```
-Check the listing for 0 errors, 0 warnings and confirm an 8 KiB ROM file. This implementation was source-reviewed but not assembled here; these steps and the hardware tests below are pending.
+Check the listing for 0 errors, 0 warnings and confirm an 8 KiB ROM file. The assistant has not independently run CAPASM; the user has confirmed that the actual RC1c ROM runs and that the cutter works on physical hardware.
 
-## Hardware smoke test
+## Hardware regression procedure (cutter operation already PASSED)
 1. Copy the newly built `ROM241.rom` onto the EBTKS SD card in place of the currently active printer ROM; reboot HP-85 to load it.
 2. In BASIC, `PVER` should identify `PRINTER85 0.03B RC1C`.
 3. With roll paper loaded correctly and hands clear of the cutter, run `PRTSET <device-selector>,2` using your existing working HP-IB device selector (for example 702 **only if** SC7/address 2 matches your setup), then `PRTKEYS 1`.
