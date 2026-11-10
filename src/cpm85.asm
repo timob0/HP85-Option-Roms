@@ -635,6 +635,8 @@ CPXFER  BIN
         LDMD R14,=BINTAB
         LDB R20,=40D
         STBD R20,X14,CPXCNT
+        CLB R20
+        STBD R20,X14,CPXCONT
         JSB X14,CXQRY
         JSB X14,CXRES
         LDBD R20,X14,CPXFIN
@@ -653,6 +655,8 @@ CXLOOP LDMD R14,=BINTAB
         RTN
 CXCHECK
         LDBD R20,X14,CPXPH
+        CMB R20,=102      ! 'B': verified program running; prompt now
+        JZR CXBUSY
         CMB R20,=127      ! 'W' waiting for A>
         JZR CXWAIT
         CMB R20,=120      ! 'P' safe point armed
@@ -662,11 +666,20 @@ CXCHECK
         JMP CXLOOP       ! 'R' active BDOS or unconfirmed link state
 CXMID   JMP CXLOOP       ! near relay for long backward jumps
 
+! Prompt immediately the first time we KNOW native CCP is not active.
+! After C=CONTINUE, retain the same transaction and grant another
+! bounded wait interval instead of immediately showing the prompt again.
+CXBUSY  LDBD R20,X14,CPXCONT
+        CMB R20,=1
+        JZR CXWAIT
+        JMP CXPRMT
 CXWAIT
         LDBD R20,X14,CPXCNT
         DCB R20
         STBD R20,X14,CPXCNT
         JNZ CXLOOP
+CXPRMT  CLB R20
+        STBD R20,X14,CPXCONT
         LDM R26,=CXMSG1
         ADM R26,R14
         LDM R36,=28D,0
@@ -703,8 +716,10 @@ CXKEY  LDBD R30,=KEYSTS
         JZR CXABRT
         JMP CXKEY
 CXCONT
-        LDB R20,=100D
+        LDB R20,=40D
         STBD R20,X14,CPXCNT
+        LDB R20,=1
+        STBD R20,X14,CPXCONT
         JMP CXBACK
 CXABRT
         LDB R22,=14       ! decimal 12: remotely confirmed cancellation
@@ -878,7 +893,8 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
-CPXCNT  BSZ 1           ! bounded initial safe-point wait polls
+CPXCNT  BSZ 1           ! bounded wait polls
+CPXCONT BSZ 1           ! CONTINUE acknowledged, wait before another prompt
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
 CPXFIN  BSZ 1           ! terminal reply consumed, return to BASIC
 CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
@@ -889,7 +905,7 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.05b FILE CONTROL"
+VERMSG   ASP "CPM85 0.05c FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
