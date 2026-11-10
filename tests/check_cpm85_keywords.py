@@ -55,7 +55,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.06a FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.06b FILE CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -192,14 +192,15 @@ assert "JSB =ERRORP" in transfer
 assert "BYT 74D" in transfer and "BYT 67D" in transfer
 assert "JSB X14,CXQRY" in transfer
 assert "LDB R22,=14" in transfer  # cancel pending before busy failure
-assert "CMB R20,=102" in transfer  # known busy, never wait for user key
+assert "CMB R20,=102      ! B could also be a transient CCP transition" in transfer
+assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
 assert "JZR CXWAIT" in transfer  # W/P have bounded grace
 assert "CMB R20,=122" in transfer  # running BDOS cannot be aborted
 assert "CPXRC   BSZ 1" in text
 assert 'ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"' in text
 startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
 assert "LDM R36,=30D,0" in startup
-assert 'VERMSG   ASP "CPM85 0.06a FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.06b FILE CONTROL"' in text
 print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
 
 # Fail-safe: exhausting the unknown/armed grace MUST fall through into
@@ -207,5 +208,12 @@ print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immed
 assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in text
 assert "CXBUSY  LDB R20,=1\n        STBD R20,X14,CPXRC\n        JMP CXCTRY" in text
 assert "CXRELY JMP CXLOOP" in text
-assert "LDB R20,=10D" in transfer
+assert "LDB R20,=8D" in transfer
 print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
+
+# v0.06b: a single BUSY phase at the CCP prompt must not trigger
+# instant cancellation; transition grace is bounded before CANCEL.
+assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
+assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in transfer
+assert 'VERMSG   ASP "CPM85 0.06b FILE CONTROL"' in text
+print("PASS: v0.06b safe CCP transient debounce")
