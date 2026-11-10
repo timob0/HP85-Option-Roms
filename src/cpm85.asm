@@ -647,7 +647,7 @@ CPXFER  BIN
         LDMD R14,=BINTAB
         CLB R20
         STBD R20,X14,CPXRC
-        LDB R20,=3
+        LDB R20,=10D    ! bounded unknown/CCP transition grace
         STBD R20,X14,CPXCNT
         JSB X14,CXQRY
         JMP CXCHK
@@ -682,10 +682,10 @@ CXWAIT  LDBD R20,X14,CPXCNT
         DCB R20
         STBD R20,X14,CPXCNT
         JNZ CXLOOP
-CXRELY JMP CXLOOP      ! two-way near relay for long JMP ranges
 CXBUSY  LDB R20,=1
         STBD R20,X14,CPXRC
         JMP CXCTRY
+CXRELY JMP CXLOOP      ! near relay, reachable only from CXACT
 
 ! No further START calls. CANCEL is atomic against the native BDOS
 ! start CAS; the ESP reports R if BDOS has won the race.
