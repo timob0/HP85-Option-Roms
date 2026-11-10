@@ -625,7 +625,7 @@ CXSHOW  LDMD R14,=BINTAB
         RTN
 CXNOLNK LDM R26,=CXUNAVL
         ADM R26,R14
-        LDM R36,=26D,0
+        LDM R36,=27D,0
         JSB =OUTSTR
         RTN
 
