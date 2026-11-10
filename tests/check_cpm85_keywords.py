@@ -34,7 +34,7 @@ print("PASS: unique alphabetic CPM85 keywords and 0-argument numeric descriptors
 
 # Drive control adds two HP BASIC string-expression parsers and keeps
 # original keyboard numeric functions' ABI and ISR forwarding untouched.
-assert "DEF TWOSTR" in text and "DEF ONESTR" in text
+assert "DEF TWOSTR" in text and "DEF ONESTR" in text and "DEF OPTEXP" in text
 assert "JSB =STREX+" in text and "JSB =STREXP" in text
 # HP-85 POMD/LDM/CMM/DCM extend to the NEXT register boundary.
 # R30/R32 (octal) span 2 bytes, whereas R40 spans EIGHT. The first
@@ -55,7 +55,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.06b FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.06c FILE CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -177,7 +177,7 @@ print("PASS: all CPM85 statements including CPREBOOT leave a fresh HP BASIC line
 
 # B2d v0.06a: quiet BASIC statements, trappable native errors and
 # no keyboard-dependent Continue/Abort prompt.
-assert 'DEF ONESTR    ! CPEXPORT' in text
+assert 'DEF OPTEXP    ! CPEXPORT: one or two string expressions' in text
 assert 'DEF TWOSTR    ! CPIMPORT' in text
 assert 'DEF CPXCODE' in text and 'ASP "CPXCODE"' in text
 for label in ("CPEXPT","CPIMPT","CPXFER","CXQRY","CXDRN","CPXCODE",
@@ -200,7 +200,7 @@ assert "CPXRC   BSZ 1" in text
 assert 'ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"' in text
 startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
 assert "LDM R36,=30D,0" in startup
-assert 'VERMSG   ASP "CPM85 0.06b FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.06c FILE CONTROL"' in text
 print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
 
 # Fail-safe: exhausting the unknown/armed grace MUST fall through into
@@ -215,5 +215,19 @@ print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
 # instant cancellation; transition grace is bounded before CANCEL.
 assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
 assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in transfer
-assert 'VERMSG   ASP "CPM85 0.06b FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.06c FILE CONTROL"' in text
 print("PASS: v0.06b safe CCP transient debounce")
+
+# v0.06c optional export destination, HP-85 four-byte string stack.
+assert "OPTEXP  PUBD R43,+R6" in text
+assert "CMB R14,=54" in text
+opt=text.split("OPTEXP  PUBD",1)[1].split("TWOSTR  PUBD",1)[0]
+assert "JSB =STREX+" in opt and "JSB =GETCMA" in opt
+assert "JSB =STREXP" in opt
+ex=text.split("CPEXPT  BIN",1)[1].split("CPIMPT  BIN",1)[0]
+assert "CMMD R20,=TOS" in ex and "SBM R20,=4,0" in ex
+assert "POMD R26,-R12" in ex and "POMD R24,-R12" in ex
+assert "CPEXONE" in ex and "STBD R20,=CPARG" in ex
+assert "TOS     DAD 101132" in text
+assert "CMB R20,=105      ! E: transport/ownership rejection" in transfer
+print("PASS: optional CPEXPORT parser, HP-85 stack arity, E-phase separation")
