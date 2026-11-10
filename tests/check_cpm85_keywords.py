@@ -182,7 +182,7 @@ assert 'DEF TWOSTR    ! CPIMPORT' in text
 assert 'DEF CPXCODE' in text and 'ASP "CPXCODE"' in text
 for label in ("CPEXPT","CPIMPT","CPXFER","CXQRY","CXDRN","CPXCODE",
               "CXBUSY","CXCANTRY","CXBUSERR","CXFILEERR"):
-    assert re.search(r"^"+label+r"\\s+",text,re.M),label
+    assert re.search(r"^"+label+r"\s+",text,re.M),label
 assert "LDB R22,=11       ! Octal 11 = decimal opcode 9" in text
 assert "LDB R22,=12       ! Octal 12 = decimal opcode 10" in text
 transfer=text.split("CPXFER  BIN",1)[1].split("CXQRY\\n",1)[0] if False else text.split("CPXFER  BIN",1)[1].split("CXQRY\\n",1)[0] if "CXQRY\\n" in text else text.split("CPXFER  BIN",1)[1].split("CXQRY\n",1)[0]
