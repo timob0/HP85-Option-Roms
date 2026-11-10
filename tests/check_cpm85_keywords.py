@@ -185,7 +185,7 @@ for label in ("CPEXPT","CPIMPT","CPXFER","CXQRY","CXDRN","CPXCODE",
     assert re.search(r"^"+label+r"\s+",text,re.M),label
 assert "LDB R22,=11       ! Octal 11 = decimal opcode 9" in text
 assert "LDB R22,=12       ! Octal 12 = decimal opcode 10" in text
-transfer=text.split("CPXFER  BIN",1)[1].split("CXQRY\\n",1)[0] if False else text.split("CPXFER  BIN",1)[1].split("CXQRY\\n",1)[0] if "CXQRY\\n" in text else text.split("CPXFER  BIN",1)[1].split("CXQRY\n",1)[0]
+transfer=text.split("CPXFER  BIN",1)[1].split("\nCXQRY\n",1)[0]
 assert "JSB =OUTSTR" not in transfer and "JSB =OUTCHR" not in transfer
 assert "CXMSG1" not in transfer and "CXKEY" not in transfer
 assert "JSB =ERRORP" in transfer
