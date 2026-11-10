@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -54,7 +54,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.04d DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.05a FILE CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -173,3 +173,22 @@ for start,end in (("CNTFUN  BIN","LSTFUN  BIN"),
                   ("LSTFUN  BIN","CPSTAT  BIN")):
     assert "JSB =OUTSTR" not in text.split(start,1)[1].split(end,1)[0]
 print("PASS: all CPM85 statements including CPREBOOT leave a fresh HP BASIC line")
+
+# B2d: transfer commands parse one/two string arguments and use
+# separate transactional opcodes. Do not alter K8, CPRESET or CPREBOOT.
+assert 'DEF ONESTR    ! CPEXPORT' in text
+assert 'DEF TWOSTR    ! CPIMPORT' in text
+for label in ("CPEXPT", "CPIMPT", "CPXFER", "CXQRY", "CXRES", "CXABRT"):
+    assert re.search(r"^"+label+r"\\s+",text,re.M),label
+assert "LDB R22,=11       ! Octal 11 = decimal opcode 9" in text
+assert "LDB R22,=12       ! Octal 12 = decimal opcode 10" in text
+assert "LDB R22,=13       ! Decimal opcode 11" in text
+assert "LDB R22,=14       ! decimal 12" in text
+assert "CMB R20,=127" in text and "CMB R20,=120" in text
+assert "CMB R20,=123" in text and "CMB R20,=106" in text
+assert "CMB R20,=130" in text
+assert "POMD R44,-R6" not in text.split("CPXFER  BIN",1)[1].split("CPTOUT  ASP",1)[0]
+assert "CPXFIN  BSZ 1" in text
+assert 'CXMSG1 ASP "CP/M NOT IDLE - RETURN TO A>"' in text
+assert 'CXMSG2 ASP "C=CONTINUE A=ABORT"' in text
+print("PASS: B2d BASIC transfer commands, wire status, cancel interlock and runtime ABI")
