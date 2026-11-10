@@ -54,7 +54,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.05b FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.05c FILE CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -208,3 +208,12 @@ assert "LDB R22,=14        ! Remote CANCEL" in text
 assert 'CXUNAVL ASP "TRANSFER STATUS UNAVAILABLE"' in text
 assert "LDB R20,=40D" in text
 print("PASS: B2d v0.05b hardware key state and post-RESET status/cancel commands")
+
+# v0.05c: known native CP/M busy is immediate, while unknown safe-point
+# discovery and a user-requested Continue retain their bounded wait.
+assert "CMB R20,=102      ! 'B': verified program running" in text
+assert "CXBUSY  LDBD R20,X14,CPXCONT" in text
+assert "CPXCONT BSZ 1" in text
+assert "CXPRMT  CLB R20" in text
+assert "STBD R20,X14,CPXCONT" in text
+print("PASS: immediate known-busy prompt and bounded continue grace")
