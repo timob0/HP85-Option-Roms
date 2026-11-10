@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -54,7 +54,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.05a FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.05b FILE CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -192,3 +192,19 @@ assert "CPXFIN  BSZ 1" in text
 assert 'CXMSG1 ASP "CP/M NOT IDLE - RETURN TO A>"' in text
 assert 'CXMSG2 ASP "C=CONTINUE A=ABORT"' in text
 print("PASS: B2d BASIC transfer commands, wire status, cancel interlock and runtime ABI")
+
+# v0.05b: KEYHIT cannot be used as a fresh event counter while BASIC is
+# executing a binary statement; hardware KEYSTS/KEYCOD are sampled instead.
+capture=text.split("CXKEY0 LDBD",1)[1].split("CXCONT",1)[0]
+assert "KEYSTS" in capture and "LRB R30" in capture
+assert "LDBD R20,=KEYCOD" in capture
+assert "KEYHIT" not in capture
+assert 'KEYSTS  DAD 177402' in text
+assert 'KEYCOD  DAD 177403' in text
+assert "CPXOLD  BSZ" not in text
+assert "CPXSTAT BIN" in text and "CPABORT BIN" in text
+assert "LDB R22,=13        ! Remote STATUS" in text
+assert "LDB R22,=14        ! Remote CANCEL" in text
+assert 'CXUNAVL ASP "TRANSFER STATUS UNAVAILABLE"' in text
+assert "LDB R20,=40D" in text
+print("PASS: B2d v0.05b hardware key state and post-RESET status/cancel commands")
