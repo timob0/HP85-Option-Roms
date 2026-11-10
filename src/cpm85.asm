@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.04d -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE CONTROL
+! CPM85 v0.05a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -71,6 +71,8 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPDIMGS
         DEF ONESTR    ! CPDMK
         DEF ONESTR    ! CPDCAT
+        DEF ONESTR    ! CPEXPORT
+        DEF TWOSTR    ! CPIMPORT
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -86,6 +88,8 @@ RUNTIM  BYT 0,0
         DEF CPIMGS
         DEF CPMAKE
         DEF CPCAT
+        DEF CPEXPT
+        DEF CPIMPT
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -101,6 +105,8 @@ ASCIIS  ASP "CPM"
         ASP "CPDIMGS"
         ASP "CPDMK"
         ASP "CPDCAT"
+        ASP "CPEXPORT"
+        ASP "CPIMPORT"
 
 ERMSG   BYT 377
 
@@ -554,6 +560,190 @@ CPDONE  LDMD R14,=BINTAB
         JSB =OUTSTR       ! native HP-85 CRT newline
 CPFIN   RTN
 
+
+! B2d blocking single-file transfers. The Teensy mailbox prefixes its
+! replies with one machine status character and '|':
+! W=CCP busy P=safe point armed R=BDOS running
+! S=success F=failure X=cancelled E=invalid/transport mismatch.
+! Source/target data stays exclusively on Teensy SD and native Z80 BDOS.
+!
+! CPEXPORT "A:STAT.COM" -> /cpm/transfers/A_STAT.COM
+        BYT 241
+CPEXPT  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        POMD R30,-R12
+        POMD R32,-R12
+        JSB X14,CPWRIM
+        LDB R22,=11       ! Octal 11 = decimal opcode 9
+        JSB X14,CPXFER
+        RTN
+
+! CPIMPORT "A:STAT.COM","A:COPY.COM" -- destination must be new.
+! The second BASIC string is at the top of R12 and is popped first.
+        BYT 241
+CPIMPT  BIN
+        LDMD R14,=BINTAB
+        JSB X14,CPCLR
+        POMD R26,-R12     ! destination address
+        POMD R24,-R12     ! destination length
+        POMD R30,-R12     ! source address
+        POMD R32,-R12     ! source length
+        JSB X14,CPWRIM
+        LDB R20,=174      ! ASCII '|'
+        STBD R20,=CPARG
+        LDM R30,R26
+        LDM R32,R24
+        JSB X14,CPWRIM
+        LDB R22,=12       ! Octal 12 = decimal opcode 10
+        JSB X14,CPXFER
+        RTN
+
+! Start ONCE. All further requests query the same Teensy-held transaction.
+! Never use CPOPC=0 as a substitute for a remote cancel acknowledgement.
+CPXFER  BIN
+        LDMD R14,=BINTAB
+        LDB R20,=100D
+        STBD R20,X14,CPXCNT
+        JSB X14,CPXQUERY
+        JSB X14,CPXRESULT
+CPXLOOP LDMD R14,=BINTAB
+        JSB X14,CPXDELAY
+        LDB R22,=13       ! Decimal opcode 11: query (octal 13)
+        JSB X14,CPXQUERY
+        JSB X14,CPXRESULT
+        LDMD R14,=BINTAB
+        LDBD R20,X14,CPXPH
+        CMB R20,=127      ! 'W' waiting for A>
+        JZR CPXWAITING
+        CMB R20,=120      ! 'P' safe point armed
+        JZR CPXWAITING
+        JMP CPXLOOP       ! 'R' active BDOS or unconfirmed link state
+
+CPXWAITING
+        LDBD R20,X14,CPXCNT
+        DCB R20
+        STBD R20,X14,CPXCNT
+        JNZ CPXLOOP
+        LDM R26,=CPXMSG1
+        ADM R26,R14
+        LDM R36,=CPXML1,0
+        JSB =OUTSTR
+        LDMD R14,=BINTAB
+        LDM R26,=CPXMSG2
+        ADM R26,R14
+        LDM R36,=CPXML2,0
+        JSB =OUTSTR
+        LDMD R14,=BINTAB
+        LDBD R20,=KEYHIT
+        STBD R20,X14,CPXOLD
+CPXKEY  LDMD R14,=BINTAB
+        LDBD R20,=KEYHIT
+        LDBD R22,X14,CPXOLD
+        CMB R20,R22
+        JZR CPXKEY
+        STBD R20,X14,CPXOLD
+        CMB R20,=103      ! ASCII 'C', decimal 67
+        JZR CPXCONT
+        CMB R20,=143      ! ASCII 'c', decimal 99
+        JZR CPXCONT
+        CMB R20,=101      ! ASCII 'A', decimal 65
+        JZR CPXABORT
+        CMB R20,=141      ! ASCII 'a', decimal 97
+        JZR CPXABORT
+        JMP CPXKEY
+CPXCONT
+        LDB R20,=100D
+        STBD R20,X14,CPXCNT
+        JMP CPXLOOP
+CPXABORT
+        LDB R22,=14       ! decimal 12: remotely confirmed cancellation
+        JSB X14,CPXQUERY
+        JSB X14,CPXRESULT
+        ! If cancel lost the race, ESP32 reports RUNNING and this
+        ! command remains blocking until BDOS completes.
+        JMP CPXLOOP
+
+! Bounded receive of one mailbox reply. On timeout do NOT claim that
+! the remote transaction was cancelled. A later status retry is safe.
+CPXQUERY
+        BIN
+        STBD R22,=CPOPC
+        LDM R36,=8D,0
+CPXWTOP LDM R56,=177,377
+CPXWLOOP
+        LDBD R20,=CPSTATE
+        CMB R20,=2
+        JZR CPXREADY
+        CMB R20,=3
+        JZR CPXREADY
+        DCM R56
+        JNZ CPXWLOOP
+        DCM R36
+        JNZ CPXWTOP
+        CLB R20
+        STBD R20,=CPOPC    ! Local reply reset, NOT remote abort
+        LDB R20,=105       ! E: no reliable reply, continue checking
+        LDMD R14,=BINTAB
+        STBD R20,X14,CPXPH
+        RTN
+CPXREADY
+        LDBD R20,=CPRPLY    ! first byte: machine phase
+        LDMD R14,=BINTAB
+        STBD R20,X14,CPXPH
+        LDBD R20,=CPRPLY    ! consume '|' separator
+        CMB R20,=174
+        JZR CPXQEND
+        LDB R20,=105       ! malformed reply
+        STBD R20,X14,CPXPH
+CPXQEND RTN
+
+! Status reply text after the leading phase and separator. Terminal
+! results are displayed using the already hardware-proven CPREAD path.
+! Nonterminal text is discarded without repeated CRT flooding.
+CPXRESULT
+        LDMD R14,=BINTAB
+        LDBD R20,X14,CPXPH
+        CMB R20,=123      ! 'S' success
+        JZR CPXFINAL
+        CMB R20,=106      ! 'F' failed
+        JZR CPXFINAL
+        CMB R20,=130      ! 'X' cancelled
+        JZR CPXFINAL
+        JSB X14,CPXDRAIN
+        RTN
+CPXFINAL
+        JSB X14,CPREAD
+        ! Terminal response is proof the remote transfer cannot start later.
+        ! Return directly to BASIC, bypassing the normal status poll loop.
+        BIN
+        POMD R44,-R6
+        RTN
+
+CPXDRAIN
+        LDM R56,=0,3       ! exactly 768 bytes maximum
+CPXDRLP LDBD R20,=CPRPLY
+        CMB R20,=0
+        JZR CPXDONE
+        DCM R56
+        JNZ CPXDRLP
+        CLB R20
+        STBD R20,=CPOPC
+CPXDONE RTN
+
+! Short bounded pause between polls. The software count used for the
+! initial prompt is approximate and will be adjusted on real hardware.
+CPXDELAY
+        LDM R56,=0,2
+CPXDLP  DCM R56
+        JNZ CPXDLP
+        RTN
+
+CPXMSG1 ASP "CP/M NOT IDLE - RETURN TO A>"
+CPXMSG2 ASP "C=CONTINUE A=ABORT"
+CPXML1  EQU 28D
+CPXML2  EQU 18D
+
 CPTOUT  ASP "CPM85 DRIVE TIMEOUT"
 CPRLONG ASP "CPM85 REPLY LIMIT"
 CPSPACE BYT 40         ! octal ASCII space, one byte for OUTSTR newline
@@ -628,6 +818,9 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
+CPXCNT  BSZ 1           ! bounded initial safe-point wait polls
+CPXPH   BSZ 1           ! machine status from Teensy reply prefix
+CPXOLD  BSZ 1           ! keyboard state before C/A prompt
 CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
 
 
@@ -636,7 +829,7 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.04d DISK CONTROL"
+VERMSG   ASP "CPM85 0.05a FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
