@@ -23,6 +23,9 @@
 !       CPDIMGS      ! list .DSK images in /cpm/disks
 !       CPDMK "WORK.DSK" ! create fresh 8 MiB disk on Teensy SD
 !       CPDCAT "A:"     ! read-only native BDOS directory catalog
+!       CPIMPORT "A_STAT.COM","F:STAT.COM"  ! quiet on success, BASIC error on failure
+!       CPEXPORT "F:STAT.COM"              ! quiet on success
+!       CPXCODE        ! last transfer status: 0/1/2/3/4
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -573,8 +576,9 @@ CPFIN   RTN
 
 ! B2d blocking single-file transfers. The Teensy mailbox prefixes its
 ! replies with one machine status character and '|':
-! W=CCP busy P=safe point armed R=BDOS running
-! S=success F=failure X=cancelled E=invalid/transport mismatch.
+! B=known application running W=not yet at CCP P=safe point armed
+! R=BDOS running S=success F=failure X=cancelled E=rejected.
+! Normal import/export is silent; failures use HP BASIC ERRORP.
 ! Source/target data stays exclusively on Teensy SD and native Z80 BDOS.
 !
 ! CPEXPORT "A:STAT.COM" -> /cpm/transfers/A_STAT.COM
@@ -589,7 +593,7 @@ CPEXPT  BIN
         JSB X14,CPXFER
         RTN
 
-! CPIMPORT "A:STAT.COM","A:COPY.COM" -- destination must be new.
+! CPIMPORT "A_STAT.COM","F:COPY.COM" -- literal Teensy SD source, new CP/M destination.
 ! The second BASIC string is at the top of R12 and is popped first.
         BYT 241
 CPIMPT  BIN
