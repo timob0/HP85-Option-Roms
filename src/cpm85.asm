@@ -627,6 +627,8 @@ CXCHECK
         JZR CXWAIT
         CMB R20,=120      ! 'P' safe point armed
         JZR CXWAIT
+        CMB R20,=125      ! 'U' no trusted UART reply: do not assume abort
+        JZR CXWAIT
         JMP CXLOOP       ! 'R' active BDOS or unconfirmed link state
 CXMID   JMP CXLOOP       ! near relay for long backward jumps
 
@@ -701,7 +703,7 @@ CXWLP
         JNZ CXWTP
         CLB R20
         STBD R20,=CPOPC    ! Local reply reset, NOT remote abort
-        LDB R20,=105       ! E: no reliable reply, continue checking
+        LDB R20,=125       ! 'U': no reliable reply; do not claim abort
         LDMD R14,=BINTAB
         STBD R20,X14,CPXPH
         RTN
@@ -712,7 +714,7 @@ CXRDY
         LDBD R20,=CPRPLY    ! consume '|' separator
         CMB R20,=174
         JZR CXQEND
-        LDB R20,=105       ! malformed reply
+        LDB R20,=125       ! 'U': malformed reply
         STBD R20,X14,CPXPH
 CXQEND RTN
 
@@ -729,6 +731,8 @@ CXRES
         CMB R20,=106      ! 'F' failed
         JZR CXFIN
         CMB R20,=130      ! 'X' cancelled
+        JZR CXFIN
+        CMB R20,=105      ! 'E' explicit remote rejection/unknown token
         JZR CXFIN
         JSB X14,CXDRN
         RTN
