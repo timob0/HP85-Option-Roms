@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.06b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.06c -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -74,7 +74,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPDIMGS
         DEF ONESTR    ! CPDMK
         DEF ONESTR    ! CPDCAT
-        DEF ONESTR    ! CPEXPORT
+        DEF OPTEXP    ! CPEXPORT: one or two string expressions
         DEF TWOSTR    ! CPIMPORT
         DEF NOPARS    ! CPXSTAT
         DEF NOPARS    ! CPABORT
@@ -135,6 +135,20 @@ NOPARS  LDB R47,R43
 ! on R12, last expression first. No arbitrary token/string peeking.
 ONESTR  PUBD R43,+R6
         JSB =STREX+
+        JEZ CSERR
+        JMP CSOK
+
+! Optional export destination: the HP-85 parser leaves the next
+! character in R14 after STREX+. The Assembler ROM examples test
+! CMB R14,=54 (octal ASCII comma) for optional trailing arguments.
+! Both forms end with the standard binary-token push in CSOK.
+OPTEXP  PUBD R43,+R6
+        JSB =STREX+
+        JEZ CSERR
+        CMB R14,=54
+        JNZ CSOK
+        JSB =GETCMA
+        JSB =STREXP
         JEZ CSERR
         JMP CSOK
 
@@ -582,15 +596,35 @@ CPFIN   RTN
 ! Normal import/export is silent; failures use HP BASIC ERRORP.
 ! Source/target data stays exclusively on Teensy SD and native Z80 BDOS.
 !
-! CPEXPORT "A:STAT.COM" -> /cpm/transfers/A_STAT.COM
+! CPEXPORT "A:STAT.COM" defaults to /cpm/transfers/A_STAT.COM
+! CPEXPORT "A:STAT.COM","NEWNAME.COM" writes explicit SD leaf instead.
+! HP-85 string runtime values occupy 4 bytes each (2 addr + 2 length).
+! The proven SIMON85 option parser checks R12 against the HP-85 TOS.
         BYT 241
 CPEXPT  BIN
         LDMD R14,=BINTAB
         JSB X14,CPCLR
+        LDM R20,R12
+        SBM R20,=4,0
+        CMMD R20,=TOS
+        JZR CPEXONE
+        ! Second argument is topmost: save its pointer/length first.
+        POMD R26,-R12
+        POMD R24,-R12
         POMD R30,-R12
         POMD R32,-R12
         JSB X14,CPWRIM
-        LDB R22,=11       ! Octal 11 = decimal opcode 9
+        LDB R20,=174
+        STBD R20,=CPARG
+        LDM R30,R26
+        LDM R32,R24
+        JSB X14,CPWRIM
+        JMP CPEXGO
+CPEXONE
+        POMD R30,-R12
+        POMD R32,-R12
+        JSB X14,CPWRIM
+CPEXGO  LDB R22,=11       ! Octal 11 = decimal opcode 9
         JSB X14,CPXFER
         RTN
 
@@ -929,7 +963,7 @@ ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.06b FILE CONTROL"
+VERMSG   ASP "CPM85 0.06c FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
@@ -953,6 +987,7 @@ STREX+  DAD 13623      ! SCAN + parse string expression
 STREXP  DAD 13626      ! Parse subsequent string expression
 GETCMA  DAD 13414      ! Demand comma and SCAN
 ERRORP  DAD 6611       ! Standard HP BASIC error
+TOS     DAD 101132     ! HP85 operating stack base (SIMON85 ABI)
 OUTCHR  DAD 35114      ! Output one character to HP CRT
 SCAN    DAD 11262
 OUTSTR  DAD 35052
