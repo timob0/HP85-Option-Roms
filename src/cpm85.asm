@@ -607,12 +607,18 @@ CPXFER  BIN
         STBD R20,X14,CPXCNT
         JSB X14,CPXQUERY
         JSB X14,CPXRESULT
+        LDBD R20,X14,CPXFIN
+        CMB R20,=1
+        JZR CPXEXIT
 CPXLOOP LDMD R14,=BINTAB
         JSB X14,CPXDELAY
         LDB R22,=13       ! Decimal opcode 11: query (octal 13)
         JSB X14,CPXQUERY
         JSB X14,CPXRESULT
         LDMD R14,=BINTAB
+        LDBD R20,X14,CPXFIN
+        CMB R20,=1
+        JZR CPXEXIT
         LDBD R20,X14,CPXPH
         CMB R20,=127      ! 'W' waiting for A>
         JZR CPXWAITING
@@ -627,12 +633,12 @@ CPXWAITING
         JNZ CPXLOOP
         LDM R26,=CPXMSG1
         ADM R26,R14
-        LDM R36,=CPXML1,0
+        LDM R36,=28D,0
         JSB =OUTSTR
         LDMD R14,=BINTAB
         LDM R26,=CPXMSG2
         ADM R26,R14
-        LDM R36,=CPXML2,0
+        LDM R36,=18D,0
         JSB =OUTSTR
         LDMD R14,=BINTAB
         LDBD R20,=KEYHIT
@@ -660,9 +666,14 @@ CPXABORT
         LDB R22,=14       ! decimal 12: remotely confirmed cancellation
         JSB X14,CPXQUERY
         JSB X14,CPXRESULT
+        LDMD R14,=BINTAB
+        LDBD R20,X14,CPXFIN
+        CMB R20,=1
+        JZR CPXEXIT
         ! If cancel lost the race, ESP32 reports RUNNING and this
         ! command remains blocking until BDOS completes.
         JMP CPXLOOP
+CPXEXIT RTN
 
 ! Bounded receive of one mailbox reply. On timeout do NOT claim that
 ! the remote transaction was cancelled. A later status retry is safe.
@@ -703,6 +714,8 @@ CPXQEND RTN
 ! Nonterminal text is discarded without repeated CRT flooding.
 CPXRESULT
         LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,CPXFIN
         LDBD R20,X14,CPXPH
         CMB R20,=123      ! 'S' success
         JZR CPXFINAL
@@ -714,10 +727,9 @@ CPXRESULT
         RTN
 CPXFINAL
         JSB X14,CPREAD
-        ! Terminal response is proof the remote transfer cannot start later.
-        ! Return directly to BASIC, bypassing the normal status poll loop.
-        BIN
-        POMD R44,-R6
+        LDMD R14,=BINTAB
+        LDB R20,=1
+        STBD R20,X14,CPXFIN
         RTN
 
 CPXDRAIN
@@ -820,6 +832,7 @@ CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
 CPXCNT  BSZ 1           ! bounded initial safe-point wait polls
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
+CPXFIN  BSZ 1           ! terminal reply consumed, return to BASIC
 CPXOLD  BSZ 1           ! keyboard state before C/A prompt
 CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
 
