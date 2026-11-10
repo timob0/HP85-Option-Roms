@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.06a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.06b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -576,7 +576,8 @@ CPFIN   RTN
 
 ! B2d blocking single-file transfers. The Teensy mailbox prefixes its
 ! replies with one machine status character and '|':
-! B=known application running W=not yet at CCP P=safe point armed
+! B=CCP currently BUSY (not proof of a running app)
+! W=not yet at CCP P=safe point armed
 ! R=BDOS running S=success F=failure X=cancelled E=rejected.
 ! Normal import/export is silent; failures use HP BASIC ERRORP.
 ! Source/target data stays exclusively on Teensy SD and native Z80 BDOS.
@@ -638,11 +639,11 @@ CXNOLNK LDM R26,=CXUNAVL
         RTN
 
 ! B2d v0.06a: BASIC-like file statements. No routine display on
-! success. Return promptly if the native CCP isn't available, cancelling
+! success. Return after a short CCP transition grace, cancelling
 ! the *same* pending transaction before reporting BASIC error 74 (STALL).
 ! Terminal failures use BASIC error 67 (FILE NAME), pending/ambiguous
 ! UART failure uses error 74. CPXCODE stores the more precise status:
-!    0 success, 1 CP/M busy, 2 file/operation failed,
+!    0 success, 1 CP/M not idle, 2 file/operation failed,
 !    3 timeout or cancellation unconfirmed, 4 transfer interrupted.
 !
 ! Each CXQRY status keeps the original Teensy transaction ID.
@@ -651,7 +652,7 @@ CPXFER  BIN
         LDMD R14,=BINTAB
         CLB R20
         STBD R20,X14,CPXRC
-        LDB R20,=10D    ! bounded unknown/CCP transition grace
+        LDB R20,=8D     ! short grace: B can be transient during CCP loop
         STBD R20,X14,CPXCNT
         JSB X14,CXQRY
         JMP CXCHK
@@ -672,8 +673,8 @@ CXCHK   LDMD R14,=BINTAB
         JZR CXCANC
         CMB R20,=122      ! R BDOS already running
         JZR CXACT
-        CMB R20,=102      ! B program running, known busy
-        JZR CXBUSY
+        CMB R20,=102      ! B could also be a transient CCP transition
+        JZR CXWAIT
         CMB R20,=120      ! P: armed, but BDOS not yet started
         JZR CXWAIT
         CMB R20,=127      ! W CCP prompt not yet found
@@ -928,7 +929,7 @@ ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.06a FILE CONTROL"
+VERMSG   ASP "CPM85 0.06b FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
