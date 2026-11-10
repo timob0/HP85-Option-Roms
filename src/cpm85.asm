@@ -675,7 +675,7 @@ CXNOLNK LDM R26,=CXUNAVL
 ! B2d v0.06a: BASIC-like file statements. No routine display on
 ! success. Return after a short CCP transition grace, cancelling
 ! the *same* pending transaction before reporting BASIC error 74 (STALL).
-! Terminal failures use BASIC error 67 (FILE NAME), pending/ambiguous
+! Terminal F failures use BASIC error 67 (FILE NAME), pending/ambiguous
 ! UART failure uses error 74. CPXCODE stores the more precise status:
 !    0 success, 1 CP/M not idle, 2 file/operation failed,
 !    3 timeout or cancellation unconfirmed, 4 transfer interrupted.
@@ -701,8 +701,8 @@ CXCHK   LDMD R14,=BINTAB
         JZR CXOK
         CMB R20,=106      ! F failed
         JZR CXFAIL
-        CMB R20,=105      ! E rejected
-        JZR CXFAIL
+        CMB R20,=105      ! E: transport/ownership rejection, not CP/M filename
+        JZR CXUNSF
         CMB R20,=130      ! X cancelled
         JZR CXCANC
         CMB R20,=122      ! R BDOS already running
