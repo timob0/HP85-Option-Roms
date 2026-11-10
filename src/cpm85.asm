@@ -605,154 +605,154 @@ CPXFER  BIN
         LDMD R14,=BINTAB
         LDB R20,=100D
         STBD R20,X14,CPXCNT
-        JSB X14,CPXQUERY
-        JSB X14,CPXRESULT
+        JSB X14,CXQRY
+        JSB X14,CXRES
         LDBD R20,X14,CPXFIN
         CMB R20,=1
-        JZR CPXEXIT
-CPXLOOP LDMD R14,=BINTAB
-        JSB X14,CPXDELAY
+        JZR CXEXIT
+CXLOOP LDMD R14,=BINTAB
+        JSB X14,CXDLY
         LDB R22,=13       ! Decimal opcode 11: query (octal 13)
-        JSB X14,CPXQUERY
-        JSB X14,CPXRESULT
+        JSB X14,CXQRY
+        JSB X14,CXRES
         LDMD R14,=BINTAB
         LDBD R20,X14,CPXFIN
         CMB R20,=1
-        JZR CPXEXIT
+        JZR CXEXIT
         LDBD R20,X14,CPXPH
         CMB R20,=127      ! 'W' waiting for A>
-        JZR CPXWAITING
+        JZR CXWAIT
         CMB R20,=120      ! 'P' safe point armed
-        JZR CPXWAITING
-        JMP CPXLOOP       ! 'R' active BDOS or unconfirmed link state
+        JZR CXWAIT
+        JMP CXLOOP       ! 'R' active BDOS or unconfirmed link state
 
-CPXWAITING
+CXWAIT
         LDBD R20,X14,CPXCNT
         DCB R20
         STBD R20,X14,CPXCNT
-        JNZ CPXLOOP
-        LDM R26,=CPXMSG1
+        JNZ CXLOOP
+        LDM R26,=CXMSG1
         ADM R26,R14
         LDM R36,=28D,0
         JSB =OUTSTR
         LDMD R14,=BINTAB
-        LDM R26,=CPXMSG2
+        LDM R26,=CXMSG2
         ADM R26,R14
         LDM R36,=18D,0
         JSB =OUTSTR
         LDMD R14,=BINTAB
         LDBD R20,=KEYHIT
         STBD R20,X14,CPXOLD
-CPXKEY  LDMD R14,=BINTAB
+CXKEY  LDMD R14,=BINTAB
         LDBD R20,=KEYHIT
         LDBD R22,X14,CPXOLD
         CMB R20,R22
-        JZR CPXKEY
+        JZR CXKEY
         STBD R20,X14,CPXOLD
         CMB R20,=103      ! ASCII 'C', decimal 67
-        JZR CPXCONT
+        JZR CXCONT
         CMB R20,=143      ! ASCII 'c', decimal 99
-        JZR CPXCONT
+        JZR CXCONT
         CMB R20,=101      ! ASCII 'A', decimal 65
-        JZR CPXABORT
+        JZR CXABRT
         CMB R20,=141      ! ASCII 'a', decimal 97
-        JZR CPXABORT
-        JMP CPXKEY
-CPXCONT
+        JZR CXABRT
+        JMP CXKEY
+CXCONT
         LDB R20,=100D
         STBD R20,X14,CPXCNT
-        JMP CPXLOOP
-CPXABORT
+        JMP CXLOOP
+CXABRT
         LDB R22,=14       ! decimal 12: remotely confirmed cancellation
-        JSB X14,CPXQUERY
-        JSB X14,CPXRESULT
+        JSB X14,CXQRY
+        JSB X14,CXRES
         LDMD R14,=BINTAB
         LDBD R20,X14,CPXFIN
         CMB R20,=1
-        JZR CPXEXIT
+        JZR CXEXIT
         ! If cancel lost the race, ESP32 reports RUNNING and this
         ! command remains blocking until BDOS completes.
-        JMP CPXLOOP
-CPXEXIT RTN
+        JMP CXLOOP
+CXEXIT RTN
 
 ! Bounded receive of one mailbox reply. On timeout do NOT claim that
 ! the remote transaction was cancelled. A later status retry is safe.
-CPXQUERY
+CXQRY
         BIN
         STBD R22,=CPOPC
         LDM R36,=8D,0
-CPXWTOP LDM R56,=177,377
-CPXWLOOP
+CXWTP LDM R56,=177,377
+CXWLP
         LDBD R20,=CPSTATE
         CMB R20,=2
-        JZR CPXREADY
+        JZR CXRDY
         CMB R20,=3
-        JZR CPXREADY
+        JZR CXRDY
         DCM R56
-        JNZ CPXWLOOP
+        JNZ CXWLP
         DCM R36
-        JNZ CPXWTOP
+        JNZ CXWTP
         CLB R20
         STBD R20,=CPOPC    ! Local reply reset, NOT remote abort
         LDB R20,=105       ! E: no reliable reply, continue checking
         LDMD R14,=BINTAB
         STBD R20,X14,CPXPH
         RTN
-CPXREADY
+CXRDY
         LDBD R20,=CPRPLY    ! first byte: machine phase
         LDMD R14,=BINTAB
         STBD R20,X14,CPXPH
         LDBD R20,=CPRPLY    ! consume '|' separator
         CMB R20,=174
-        JZR CPXQEND
+        JZR CXQEND
         LDB R20,=105       ! malformed reply
         STBD R20,X14,CPXPH
-CPXQEND RTN
+CXQEND RTN
 
 ! Status reply text after the leading phase and separator. Terminal
 ! results are displayed using the already hardware-proven CPREAD path.
 ! Nonterminal text is discarded without repeated CRT flooding.
-CPXRESULT
+CXRES
         LDMD R14,=BINTAB
         CLB R20
         STBD R20,X14,CPXFIN
         LDBD R20,X14,CPXPH
         CMB R20,=123      ! 'S' success
-        JZR CPXFINAL
+        JZR CXFIN
         CMB R20,=106      ! 'F' failed
-        JZR CPXFINAL
+        JZR CXFIN
         CMB R20,=130      ! 'X' cancelled
-        JZR CPXFINAL
-        JSB X14,CPXDRAIN
+        JZR CXFIN
+        JSB X14,CXDRN
         RTN
-CPXFINAL
+CXFIN
         JSB X14,CPREAD
         LDMD R14,=BINTAB
         LDB R20,=1
         STBD R20,X14,CPXFIN
         RTN
 
-CPXDRAIN
+CXDRN
         LDM R56,=0,3       ! exactly 768 bytes maximum
-CPXDRLP LDBD R20,=CPRPLY
+CXDRLP LDBD R20,=CPRPLY
         CMB R20,=0
-        JZR CPXDONE
+        JZR CXDONE
         DCM R56
-        JNZ CPXDRLP
+        JNZ CXDRLP
         CLB R20
         STBD R20,=CPOPC
-CPXDONE RTN
+CXDONE RTN
 
 ! Short bounded pause between polls. The software count used for the
 ! initial prompt is approximate and will be adjusted on real hardware.
-CPXDELAY
+CXDLY
         LDM R56,=0,2
-CPXDLP  DCM R56
-        JNZ CPXDLP
+CXDLP  DCM R56
+        JNZ CXDLP
         RTN
 
-CPXMSG1 ASP "CP/M NOT IDLE - RETURN TO A>"
-CPXMSG2 ASP "C=CONTINUE A=ABORT"
+CXMSG1 ASP "CP/M NOT IDLE - RETURN TO A>"
+CXMSG2 ASP "C=CONTINUE A=ABORT"
 CPXML1  EQU 28D
 CPXML2  EQU 18D
 
