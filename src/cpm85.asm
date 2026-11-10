@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.05b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.06a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -75,6 +75,7 @@ PARSE   BYT 0,0
         DEF TWOSTR    ! CPIMPORT
         DEF NOPARS    ! CPXSTAT
         DEF NOPARS    ! CPABORT
+        BSZ 2         ! CPXCODE numeric implied function (no parser)
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -94,6 +95,7 @@ RUNTIM  BYT 0,0
         DEF CPIMPT
         DEF CPXSTAT
         DEF CPABORT
+        DEF CPXCODE
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -113,6 +115,7 @@ ASCIIS  ASP "CPM"
         ASP "CPIMPORT"
         ASP "CPXSTAT"
         ASP "CPABORT"
+        ASP "CPXCODE"
 
 ERMSG   BYT 377
 
@@ -166,6 +169,7 @@ INLOAD  LDMD R14,=BINTAB
         STBD R20,X14,KHACT
         STBD R20,X14,KCOUNT
         STBD R20,X14,KLAST
+        STBD R20,X14,CPXRC
         RTN
 
 INRESET LDMD R14,=BINTAB
@@ -193,7 +197,7 @@ CPMRUN  SAD
 
         LDM R26,=ONMSG
         ADMD R26,=BINTAB
-        LDM R36,=42D,0
+        LDM R36,=28D,0
         JSB =OUTSTR
 
         BIN
@@ -629,111 +633,125 @@ CXNOLNK LDM R26,=CXUNAVL
         JSB =OUTSTR
         RTN
 
-! Start ONCE. All further requests query the same Teensy-held transaction.
-! Never use CPOPC=0 as a substitute for a remote cancel acknowledgement.
+! B2d v0.06a: BASIC-like file statements. No routine display on
+! success. Return promptly if the native CCP isn't available, cancelling
+! the *same* pending transaction before reporting BASIC error 74 (STALL).
+! Terminal failures use BASIC error 67 (FILE NAME), pending/ambiguous
+! UART failure uses error 74. CPXCODE stores the more precise status:
+!    0 success, 1 CP/M busy, 2 file/operation failed,
+!    3 timeout or cancellation unconfirmed, 4 transfer interrupted.
+!
+! Each CXQRY status keeps the original Teensy transaction ID.
+! The ESP/native gate still decides if/when BDOS may start.
 CPXFER  BIN
         LDMD R14,=BINTAB
-        LDB R20,=40D
-        STBD R20,X14,CPXCNT
         CLB R20
-        STBD R20,X14,CPXCONT
+        STBD R20,X14,CPXRC
+        LDB R20,=3
+        STBD R20,X14,CPXCNT
         JSB X14,CXQRY
-        JSB X14,CXRES
-        LDBD R20,X14,CPXFIN
-        CMB R20,=1
-        JNZ CXLOOP
-        RTN
-CXLOOP LDMD R14,=BINTAB
-        JSB X14,CXDLY
-        LDB R22,=13       ! Decimal opcode 11: query (octal 13)
-        JSB X14,CXQRY
-        JSB X14,CXRES
-        LDMD R14,=BINTAB
-        LDBD R20,X14,CPXFIN
-        CMB R20,=1
-        JNZ CXCHECK
-        RTN
-CXCHECK
-        LDBD R20,X14,CPXPH
-        CMB R20,=102      ! 'B': verified program running; prompt now
-        JZR CXBUSY
-        CMB R20,=127      ! 'W' waiting for A>
-        JZR CXWAIT
-        CMB R20,=120      ! 'P' safe point armed
-        JZR CXWAIT
-        CMB R20,=125      ! 'U' no trusted UART reply: do not assume abort
-        JZR CXWAIT
-        JMP CXLOOP       ! 'R' active BDOS or unconfirmed link state
-CXMID   JMP CXLOOP       ! near relay for long backward jumps
+        JMP CXCHK
 
-! Prompt immediately the first time we KNOW native CCP is not active.
-! After C=CONTINUE, retain the same transaction and grant another
-! bounded wait interval instead of immediately showing the prompt again.
-CXBUSY  LDBD R20,X14,CPXCONT
-        CMB R20,=1
+CXLOOP  LDMD R14,=BINTAB
+        JSB X14,CXDLY
+        LDB R22,=13       ! status, original transaction
+        JSB X14,CXQRY
+CXCHK   LDMD R14,=BINTAB
+        LDBD R20,X14,CPXPH
+        CMB R20,=123      ! S success
+        JZR CXSUCCESS
+        CMB R20,=106      ! F failed
+        JZR CXFAILED
+        CMB R20,=105      ! E rejected
+        JZR CXFAILED
+        CMB R20,=130      ! X cancelled
+        JZR CXCANCEL
+        CMB R20,=122      ! R BDOS already running
+        JZR CXACTIVE
+        CMB R20,=102      ! B program running, known busy
+        JZR CXBUSY
+        CMB R20,=120      ! P safe point armed
+        JZR CXLOOP
+        CMB R20,=127      ! W CCP prompt not yet found
         JZR CXWAIT
-        JMP CXPRMT
-CXWAIT
-        LDBD R20,X14,CPXCNT
+        CMB R20,=125      ! U transport uncertain
+        JZR CXWAIT
+        JMP CXUNSAFE     ! unknown phase: don't assume success
+
+CXWAIT  LDBD R20,X14,CPXCNT
         DCB R20
         STBD R20,X14,CPXCNT
         JNZ CXLOOP
-CXPRMT  CLB R20
-        STBD R20,X14,CPXCONT
-        LDM R26,=CXMSG1
-        ADM R26,R14
-        LDM R36,=28D,0
-        JSB =OUTSTR
-        LDMD R14,=BINTAB
-        LDM R26,=CXMSG2
-        ADM R26,R14
-        LDM R36,=18D,0
-        JSB =OUTSTR
-        JMP CXKEY0
-CXBACK  JMP CXMID        ! second near relay, avoids CAPASM branch overflow
-! KEYHIT is a system single-slot pending key, not a fresh key-event
-! queue. BASIC can leave SVCWRD set while a binary statement runs, so
-! comparing KEYHIT values never sees a second key. Instead read the
-! keyboard controller's physical depressed flag and raw KEYCOD. Wait
-! for full release first to avoid accepting the keystroke that invoked
-! the original BASIC statement. KEYSTS bit 1 is tested by LRB/JEV,
-! the same hardware-proven pattern used by PRINTER85 KHREL.
-CXKEY0 LDBD R30,=KEYSTS
-        LRB R30
-        JEV CXKEY
-        JMP CXKEY0
-CXKEY  LDBD R30,=KEYSTS
-        LRB R30
-        JEV CXKEY
-        LDBD R20,=KEYCOD
-        CMB R20,=103      ! ASCII 'C', decimal 67
-        JZR CXCONT
-        CMB R20,=143      ! ASCII 'c', decimal 99
-        JZR CXCONT
-        CMB R20,=101      ! ASCII 'A', decimal 65
-        JZR CXABRT
-        CMB R20,=141      ! ASCII 'a', decimal 97
-        JZR CXABRT
-        JMP CXKEY
-CXCONT
-        LDB R20,=40D
-        STBD R20,X14,CPXCNT
-        LDB R20,=1
-        STBD R20,X14,CPXCONT
-        JMP CXBACK
-CXABRT
-        LDB R22,=14       ! decimal 12: remotely confirmed cancellation
+CXBUSY  LDB R20,=1
+        STBD R20,X14,CPXRC
+        JMP CXCANTRY
+
+! No further START calls. CANCEL is atomic against the native BDOS
+! start CAS; the ESP reports R if BDOS has won the race.
+CXCANTRY
+        LDB R22,=14      ! decimal 12: cancel pending only
         JSB X14,CXQRY
-        JSB X14,CXRES
         LDMD R14,=BINTAB
-        LDBD R20,X14,CPXFIN
-        CMB R20,=1
-        JNZ CXABGO
+        LDBD R20,X14,CPXPH
+        CMB R20,=130      ! X confirms no BDOS start
+        JZR CXBUSERR
+        CMB R20,=123      ! already completed
+        JZR CXSUCCESS
+        CMB R20,=106      ! terminal file failure
+        JZR CXFAILED
+        CMB R20,=122      ! already actively running
+        JZR CXACTIVE
+        CMB R20,=125      ! UART timeout: still unresolved
+        JZR CXUNSAFE
+        CMB R20,=105      ! unknown remote transaction/rejected
+        JZR CXUNSAFE
+        JMP CXUNSAFE
+
+CXACTIVE
+        ! Once BDOS has started we must wait for terminal status.
+        ! No pre-start abort is allowed after this point.
+        LDB R20,=4
+        STBD R20,X14,CPXRC
+        JMP CXLOOP
+CXSUCCESS
+        LDB R20,=0
+        STBD R20,X14,CPXRC
+        JSB X14,CXDRN
         RTN
-CXABGO
-        ! If cancel lost the race, ESP32 reports RUNNING and this
-        ! command remains blocking until BDOS completes.
-        JMP CXBACK
+CXFAILED
+        LDB R20,=2
+        STBD R20,X14,CPXRC
+        JSB X14,CXDRN
+        JMP CXFILEERR
+CXCANCEL
+        LDB R20,=1
+        STBD R20,X14,CPXRC
+        JSB X14,CXDRN
+        JMP CXBUSERR
+CXUNSAFE
+        LDB R20,=3
+        STBD R20,X14,CPXRC
+        JSB X14,CXDRN
+        JMP CXBUSERR
+CXBUSERR
+        JSB X14,CXDRN
+        JSB =ERRORP
+        BYT 74D          ! HP-85 STALL, trappable by ON ERROR
+CXFILEERR
+        JSB =ERRORP
+        BYT 67D          ! HP-85 FILE NAME, trappable by ON ERROR
+
+! Numeric last-transfer status for error handlers (CPXCODE).
+! Attribute 0,55 is the existing hardware-proven zero-arg function ABI.
+        BYT 0,55
+CPXCODE BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,CPXRC
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
+        RTN
 
 ! Bounded receive of one mailbox reply. On timeout do NOT claim that
 ! the remote transaction was cancelled. A later status retry is safe.
@@ -893,19 +911,19 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
-CPXCNT  BSZ 1           ! bounded wait polls
-CPXCONT BSZ 1           ! CONTINUE acknowledged, wait before another prompt
+CPXCNT  BSZ 1           ! prompt-discovery grace count
+CPXRC   BSZ 1           ! last BASIC transfer result (CPXCODE)
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
 CPXFIN  BSZ 1           ! terminal reply consumed, return to BASIC
 CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
 
 
 ! Message bytes (ASCII subset).  Lengths are decimal, not null-terminated.
-ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
+ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.05c FILE CONTROL"
+VERMSG   ASP "CPM85 0.06a FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
