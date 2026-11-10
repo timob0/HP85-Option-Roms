@@ -201,3 +201,11 @@ startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
 assert "LDM R36,=30D,0" in startup
 assert 'VERMSG   ASP "CPM85 0.06a FILE CONTROL"' in text
 print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
+
+# Fail-safe: exhausting the unknown/armed grace MUST fall through into
+# CXBUSY remote CANCEL, not a backward loop/relay (regression v0.06a).
+assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in text
+assert "CXBUSY  LDB R20,=1\n        STBD R20,X14,CPXRC\n        JMP CXCTRY" in text
+assert "CXRELY JMP CXLOOP" in text
+assert "LDB R20,=10D" in transfer
+print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
