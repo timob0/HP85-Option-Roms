@@ -179,7 +179,7 @@ print("PASS: all CPM85 statements including CPREBOOT leave a fresh HP BASIC line
 assert 'DEF ONESTR    ! CPEXPORT' in text
 assert 'DEF TWOSTR    ! CPIMPORT' in text
 for label in ("CPEXPT", "CPIMPT", "CPXFER", "CXQRY", "CXRES", "CXABRT"):
-    assert re.search(r"^"+label+r"\\s+",text,re.M),label
+    assert re.search(r"^"+label+r"\s+",text,re.M),label
 assert "LDB R22,=11       ! Octal 11 = decimal opcode 9" in text
 assert "LDB R22,=12       ! Octal 12 = decimal opcode 10" in text
 assert "LDB R22,=13       ! Decimal opcode 11" in text
