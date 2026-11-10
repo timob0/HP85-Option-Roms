@@ -659,15 +659,15 @@ CXLOOP  LDMD R14,=BINTAB
 CXCHK   LDMD R14,=BINTAB
         LDBD R20,X14,CPXPH
         CMB R20,=123      ! S success
-        JZR CXSUCCESS
+        JZR CXOK
         CMB R20,=106      ! F failed
-        JZR CXFAILED
+        JZR CXFAIL
         CMB R20,=105      ! E rejected
-        JZR CXFAILED
+        JZR CXFAIL
         CMB R20,=130      ! X cancelled
-        JZR CXCANCEL
+        JZR CXCANC
         CMB R20,=122      ! R BDOS already running
-        JZR CXACTIVE
+        JZR CXACT
         CMB R20,=102      ! B program running, known busy
         JZR CXBUSY
         CMB R20,=120      ! P: armed, but BDOS not yet started
@@ -676,68 +676,69 @@ CXCHK   LDMD R14,=BINTAB
         JZR CXWAIT
         CMB R20,=125      ! U transport uncertain
         JZR CXWAIT
-        JMP CXUNSAFE     ! unknown phase: don't assume success
+        JMP CXUNSF     ! unknown phase: don't assume success
 
 CXWAIT  LDBD R20,X14,CPXCNT
         DCB R20
         STBD R20,X14,CPXCNT
         JNZ CXLOOP
+CXRELY JMP CXLOOP      ! two-way near relay for long JMP ranges
 CXBUSY  LDB R20,=1
         STBD R20,X14,CPXRC
-        JMP CXCANTRY
+        JMP CXCTRY
 
 ! No further START calls. CANCEL is atomic against the native BDOS
 ! start CAS; the ESP reports R if BDOS has won the race.
-CXCANTRY
+CXCTRY
         LDB R22,=14      ! decimal 12: cancel pending only
         JSB X14,CXQRY
         LDMD R14,=BINTAB
         LDBD R20,X14,CPXPH
         CMB R20,=130      ! X confirms no BDOS start
-        JZR CXBUSERR
+        JZR CXBERR
         CMB R20,=123      ! already completed
-        JZR CXSUCCESS
+        JZR CXOK
         CMB R20,=106      ! terminal file failure
-        JZR CXFAILED
+        JZR CXFAIL
         CMB R20,=122      ! already actively running
-        JZR CXACTIVE
+        JZR CXACT
         CMB R20,=125      ! UART timeout: still unresolved
-        JZR CXUNSAFE
+        JZR CXUNSF
         CMB R20,=105      ! unknown remote transaction/rejected
-        JZR CXUNSAFE
-        JMP CXUNSAFE
+        JZR CXUNSF
+        JMP CXUNSF
 
-CXACTIVE
+CXACT
         ! Once BDOS has started we must wait for terminal status.
         ! No pre-start abort is allowed after this point.
         LDB R20,=4
         STBD R20,X14,CPXRC
-        JMP CXLOOP
-CXSUCCESS
+        JMP CXRELY
+CXOK
         LDB R20,=0
         STBD R20,X14,CPXRC
         JSB X14,CXDRN
         RTN
-CXFAILED
+CXFAIL
         LDB R20,=2
         STBD R20,X14,CPXRC
         JSB X14,CXDRN
-        JMP CXFILEERR
-CXCANCEL
+        JMP CXFERR
+CXCANC
         LDB R20,=1
         STBD R20,X14,CPXRC
         JSB X14,CXDRN
-        JMP CXBUSERR
-CXUNSAFE
+        JMP CXBERR
+CXUNSF
         LDB R20,=3
         STBD R20,X14,CPXRC
         JSB X14,CXDRN
-        JMP CXBUSERR
-CXBUSERR
+        JMP CXBERR
+CXBERR
         JSB X14,CXDRN
         JSB =ERRORP
         BYT 74D          ! HP-85 STALL, trappable by ON ERROR
-CXFILEERR
+CXFERR
         JSB =ERRORP
         BYT 67D          ! HP-85 FILE NAME, trappable by ON ERROR
 
