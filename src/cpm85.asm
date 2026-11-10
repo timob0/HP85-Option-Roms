@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.05a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.05b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -73,6 +73,8 @@ PARSE   BYT 0,0
         DEF ONESTR    ! CPDCAT
         DEF ONESTR    ! CPEXPORT
         DEF TWOSTR    ! CPIMPORT
+        DEF NOPARS    ! CPXSTAT
+        DEF NOPARS    ! CPABORT
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -90,6 +92,8 @@ RUNTIM  BYT 0,0
         DEF CPCAT
         DEF CPEXPT
         DEF CPIMPT
+        DEF CPXSTAT
+        DEF CPABORT
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -107,6 +111,8 @@ ASCIIS  ASP "CPM"
         ASP "CPDCAT"
         ASP "CPEXPORT"
         ASP "CPIMPORT"
+        ASP "CPXSTAT"
+        ASP "CPABORT"
 
 ERMSG   BYT 377
 
@@ -599,11 +605,35 @@ CPIMPT  BIN
         JSB X14,CPXFER
         RTN
 
+! Recovery commands are usable even after RESET/STOP interrupted an
+! earlier BASIC-side loop. The Teensy holds the original transaction ID.
+! STATUS and CANCEL NEVER start or repeat a BDOS file operation.
+        BYT 241
+CPXSTAT BIN
+        LDB R22,=13        ! Remote STATUS, octal for 11
+        JMP CXSHOW
+
+        BYT 241
+CPABORT BIN
+        LDB R22,=14        ! Remote CANCEL, octal for 12
+CXSHOW  LDMD R14,=BINTAB
+        JSB X14,CXQRY
+        LDBD R20,X14,CPXPH
+        CMB R20,=125       ! U means the mailbox had no reliable reply
+        JZR CXNOLNK
+        JSB X14,CPREAD    ! CRT: print text after phase prefix
+        RTN
+CXNOLNK LDM R26,=CXUNAVL
+        ADM R26,R14
+        LDM R36,=26D,0
+        JSB =OUTSTR
+        RTN
+
 ! Start ONCE. All further requests query the same Teensy-held transaction.
 ! Never use CPOPC=0 as a substitute for a remote cancel acknowledgement.
 CPXFER  BIN
         LDMD R14,=BINTAB
-        LDB R20,=100D
+        LDB R20,=40D
         STBD R20,X14,CPXCNT
         JSB X14,CXQRY
         JSB X14,CXRES
@@ -646,17 +676,23 @@ CXWAIT
         ADM R26,R14
         LDM R36,=18D,0
         JSB =OUTSTR
-        LDMD R14,=BINTAB
-        LDBD R20,=KEYHIT
-        STBD R20,X14,CPXOLD
-        JMP CXKEY
+        JMP CXKEY0
 CXBACK  JMP CXMID        ! second near relay, avoids CAPASM branch overflow
-CXKEY  LDMD R14,=BINTAB
-        LDBD R20,=KEYHIT
-        LDBD R22,X14,CPXOLD
-        CMB R20,R22
-        JZR CXKEY
-        STBD R20,X14,CPXOLD
+! KEYHIT is a system single-slot pending key, not a fresh key-event
+! queue. BASIC can leave SVCWRD set while a binary statement runs, so
+! comparing KEYHIT values never sees a second key. Instead read the
+! keyboard controller's physical depressed flag and raw KEYCOD. Wait
+! for full release first to avoid accepting the keystroke that invoked
+! the original BASIC statement. KEYSTS bit 1 is tested by LRB/JEV,
+! the same hardware-proven pattern used by PRINTER85 KHREL.
+CXKEY0 LDBD R30,=KEYSTS
+        LRB R30
+        JEV CXKEY
+        JMP CXKEY0
+CXKEY  LDBD R30,=KEYSTS
+        LRB R30
+        JEV CXKEY
+        LDBD R20,=KEYCOD
         CMB R20,=103      ! ASCII 'C', decimal 67
         JZR CXCONT
         CMB R20,=143      ! ASCII 'c', decimal 99
@@ -762,6 +798,7 @@ CXDLP  DCM R56
         JNZ CXDLP
         RTN
 
+CXUNAVL ASP "TRANSFER STATUS UNAVAILABLE"
 CXMSG1 ASP "CP/M NOT IDLE - RETURN TO A>"
 CXMSG2 ASP "C=CONTINUE A=ABORT"
 CPXML1  EQU 28D
@@ -844,7 +881,6 @@ CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
 CPXCNT  BSZ 1           ! bounded initial safe-point wait polls
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
 CPXFIN  BSZ 1           ! terminal reply consumed, return to BASIC
-CPXOLD  BSZ 1           ! keyboard state before C/A prompt
 CPMKBUF BSZ 96D         ! 9+79+3 maximum, decimal; assembler defaults octal
 
 
@@ -853,7 +889,7 @@ ONMSG   ASP "CPM85 KEY CAPTURE ON - K8 RETURNS TO BASIC"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.05a FILE CONTROL"
+VERMSG   ASP "CPM85 0.05b FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
@@ -864,6 +900,8 @@ BINTAB  DAD 101233
 ROMFL   DAD 101231
 CHIDLE  DAD 102416
 KEYHIT  DAD 100671
+KEYSTS  DAD 177402     ! hardware key depressed flag, bit 1
+KEYCOD  DAD 177403     ! hardware raw key code while pressed
 EOJ2    DAD 34772
 CPKEY   DAD 177741     ! EBTKS keyboard data I/O port
 CPCTL   DAD 177742     ! EBTKS keyboard attach/detach I/O port
