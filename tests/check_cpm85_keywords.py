@@ -181,7 +181,7 @@ assert 'DEF ONESTR    ! CPEXPORT' in text
 assert 'DEF TWOSTR    ! CPIMPORT' in text
 assert 'DEF CPXCODE' in text and 'ASP "CPXCODE"' in text
 for label in ("CPEXPT","CPIMPT","CPXFER","CXQRY","CXDRN","CPXCODE",
-              "CXBUSY","CXCANTRY","CXBUSERR","CXFILEERR"):
+              "CXBUSY","CXCTRY","CXBERR","CXFERR"):
     assert re.search(r"^"+label+r"\s+",text,re.M),label
 assert "LDB R22,=11       ! Octal 11 = decimal opcode 9" in text
 assert "LDB R22,=12       ! Octal 12 = decimal opcode 10" in text
