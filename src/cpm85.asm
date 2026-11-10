@@ -670,8 +670,8 @@ CXCHK   LDMD R14,=BINTAB
         JZR CXACTIVE
         CMB R20,=102      ! B program running, known busy
         JZR CXBUSY
-        CMB R20,=120      ! P safe point armed
-        JZR CXLOOP
+        CMB R20,=120      ! P: armed, but BDOS not yet started
+        JZR CXWAIT
         CMB R20,=127      ! W CCP prompt not yet found
         JZR CXWAIT
         CMB R20,=125      ! U transport uncertain
