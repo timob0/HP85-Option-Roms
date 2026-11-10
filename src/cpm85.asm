@@ -609,7 +609,8 @@ CPXFER  BIN
         JSB X14,CXRES
         LDBD R20,X14,CPXFIN
         CMB R20,=1
-        JZR CXEXIT
+        JNZ CXLOOP
+        RTN
 CXLOOP LDMD R14,=BINTAB
         JSB X14,CXDLY
         LDB R22,=13       ! Decimal opcode 11: query (octal 13)
@@ -618,13 +619,16 @@ CXLOOP LDMD R14,=BINTAB
         LDMD R14,=BINTAB
         LDBD R20,X14,CPXFIN
         CMB R20,=1
-        JZR CXEXIT
+        JNZ CXCHECK
+        RTN
+CXCHECK
         LDBD R20,X14,CPXPH
         CMB R20,=127      ! 'W' waiting for A>
         JZR CXWAIT
         CMB R20,=120      ! 'P' safe point armed
         JZR CXWAIT
         JMP CXLOOP       ! 'R' active BDOS or unconfirmed link state
+CXMID   JMP CXLOOP       ! near relay for long backward jumps
 
 CXWAIT
         LDBD R20,X14,CPXCNT
@@ -643,6 +647,8 @@ CXWAIT
         LDMD R14,=BINTAB
         LDBD R20,=KEYHIT
         STBD R20,X14,CPXOLD
+        JMP CXKEY
+CXBACK  JMP CXMID        ! second near relay, avoids CAPASM branch overflow
 CXKEY  LDMD R14,=BINTAB
         LDBD R20,=KEYHIT
         LDBD R22,X14,CPXOLD
@@ -661,7 +667,7 @@ CXKEY  LDMD R14,=BINTAB
 CXCONT
         LDB R20,=100D
         STBD R20,X14,CPXCNT
-        JMP CXLOOP
+        JMP CXBACK
 CXABRT
         LDB R22,=14       ! decimal 12: remotely confirmed cancellation
         JSB X14,CXQRY
@@ -669,11 +675,12 @@ CXABRT
         LDMD R14,=BINTAB
         LDBD R20,X14,CPXFIN
         CMB R20,=1
-        JZR CXEXIT
+        JNZ CXABGO
+        RTN
+CXABGO
         ! If cancel lost the race, ESP32 reports RUNNING and this
         ! command remains blocking until BDOS completes.
-        JMP CXLOOP
-CXEXIT RTN
+        JMP CXBACK
 
 ! Bounded receive of one mailbox reply. On timeout do NOT claim that
 ! the remote transaction was cancelled. A later status retry is safe.
