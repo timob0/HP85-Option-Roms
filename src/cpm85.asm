@@ -197,7 +197,7 @@ CPMRUN  SAD
 
         LDM R26,=ONMSG
         ADMD R26,=BINTAB
-        LDM R36,=28D,0
+        LDM R36,=30D,0
         JSB =OUTSTR
 
         BIN
