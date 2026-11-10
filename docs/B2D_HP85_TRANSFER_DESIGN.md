@@ -1,3 +1,54 @@
+## 2026-11-11 — v0.06a hardware regression and ROM-only v0.06b fix
+
+User deployed v0.06a matched firmware. Cosmetic and BASIC error handling
+changes are correct: short `CONNECTED TO CP/M - K8 TO EXIT` and native
+HP errors. But no file imported: first import after fresh boot produced
+**ERROR 74 STALL**, later retries immediately **ERROR 67 FILE NAME**.
+
+Source inspection revealed a definite premature-cancel defect in v0.06a:
+ESP32 reports advisory phase `B` when `Gate::mode` is BUSY. This mode is
+also present during normal CCP prompt/BDOS transitions and is **not**
+proof that a CP/M application is continuously running. The v0.06a
+HP statement immediately cancelled on the *first* `B`, before it
+could transition to CCP_INPUT. That can explain the initial STALL.
+The later FILE NAME errors may be a **separate** issue if the user
+supplied `A:STAT.COM` after installing the new literal SD-name firmware:
+B2d now requires `A_STAT.COM` or `NOFILE.COM` as SD source.
+Do not assume the exact command arguments used; ask user to report if
+failure persists.
+
+**v0.06b (ROM-only fix)** changes the initial phase `B` to use the
+same small bounded grace as `W` / `P` before issuing the previously
+hardware-validated atomic remote CANCEL. Grace is 8 polling cycles
+(uncalibrated; this is deliberately not an instant busy rejection).
+`R` active BDOS still runs to terminal state, and
+`S` completes silently. Keep the correct native error/CPXCODE
+behavior and 30-character CPM banner. No ESP32/Teensy source changes
+needed for this iteration.
+
+**Build:** v0.06b CAPASM, keyword ABI regression and LIF packaging
+passed on feature branch, GitHub Actions run 42923547016. Do not merge
+to main until hardware confirms. The reason for any remaining FILE NAME
+error must be diagnosed with explicit source/destination names and
+`CPXSTAT`, not assigned to the premature B phase alone.
+
+Next hardware test:
+1. Keep current matched B2d ESP32 and Teensy firmware installed.
+2. Pull/assemble/load CPM85 **v0.06b**. `CPVER` should say v0.06b.
+3. With native CP/M idle at `A>`, ensure destination F:FIXTST.COM does
+   **not** exist. Try `CPIMPORT "A_STAT.COM","F:FIXTST.COM"`.
+   Expected silent success and `CPXCODE=0`.
+4. If it fails, report **exact** BASIC statement, ERROR number,
+   `CPXCODE` and output of `CPXSTAT`. This distinguishes START reject,
+   pending cancellation, and source naming.
+5. Only after idle import succeeds, test again under Multiplan. Expect
+   promptly cancelled transfer with ERROR 74, no destination created.
+6. Also test `CPIMPORT "NOFILE.COM","F:NOSUCH.COM"` while idle.
+   This is a valid SD syntax and should fail because source does not
+   exist (file-related error), not an invalid SD path.
+
+---
+
 ## 2026-11-10 — User-approved HP BASIC semantics, CPM85 v0.06a
 
 Following successful physical v0.05b Abort-while-Multiplan test, user pointed
