@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT", "CPXCODE"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -15,10 +15,11 @@ for a in names:
             assert not a.startswith(b), (a, b)
 # 0,55 octal = NO arguments, numeric function.  40,55 octal
 # indicates TWO numeric arguments and is only correct for TEST(x,y).
-assert text.count("        BYT 0,55") == 2
+assert text.count("        BYT 0,55") == 3
 assert "        BYT 40,55" not in text
 assert re.search(r"BYT 0,55\s*CNTFUN\s+BIN", text)
 assert re.search(r"BYT 0,55\s*LSTFUN\s+BIN", text)
+assert re.search(r"BYT 0,55\s*CPXCODE\s+BIN", text)
 # The user-verified keyboard ownership remains unchanged.
 assert "CMB R22,=207" in text
 assert "CPKEY   DAD 177741" in text and "CPCTL   DAD 177742" in text
