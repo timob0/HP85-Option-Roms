@@ -702,7 +702,7 @@ CXCHK   LDMD R14,=BINTAB
         CMB R20,=106      ! F failed
         JZR CXFAIL
         CMB R20,=105      ! E: transport/ownership rejection, not CP/M filename
-        JZR CXUNSF
+        JZR CXERLY
         CMB R20,=130      ! X cancelled
         JZR CXCANC
         CMB R20,=122      ! R BDOS already running
@@ -724,6 +724,7 @@ CXWAIT  LDBD R20,X14,CPXCNT
 CXBUSY  LDB R20,=1
         STBD R20,X14,CPXRC
         JMP CXCTRY
+CXERLY JMP CXUNSF      ! near relay for early E-phase rejection
 CXRELY JMP CXLOOP      ! near relay, reachable only from CXACT
 
 ! No further START calls. CANCEL is atomic against the native BDOS
