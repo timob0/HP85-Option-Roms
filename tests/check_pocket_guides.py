@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[1]
 guides = {
     "SIMON85": ("src/SIMON85_rom.asm", "KWTABL", "ERMSG", "v0.13a2"),
     "PRINTER85": ("src/printer85_rom.asm", "P8ASCI", "ERMSG", "v0.03b RC1c"),
-    "CPM85": ("src/cpm85.asm", "ASCIIS", "ERMSG", "v0.06d"),
+    "CPM85": ("src/cpm85.asm", "ASCIIS", "ERMSG", "v0.07a"),
 }
 for name, (source, begin, end, version) in guides.items():
     rom = (root / source).read_text()
