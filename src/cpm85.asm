@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.06d -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.07a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -26,6 +26,7 @@
 !       CPIMPORT "A_STAT.COM","F:STAT.COM"  ! quiet on success, BASIC error on failure
 !       CPEXPORT "F:STAT.COM"              ! quiet on success
 !       CPXCODE        ! last transfer status: 0/1/2/3/4
+!       CPLOOP         ! experimental foreground keyboard loop ONLY; no printer yet
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -79,6 +80,7 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPXSTAT
         DEF NOPARS    ! CPABORT
         BSZ 2         ! CPXCODE numeric implied function (no parser)
+        DEF NOPARS    ! CPLOOP (experimental foreground loop)
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -99,6 +101,7 @@ RUNTIM  BYT 0,0
         DEF CPXSTAT
         DEF CPABORT
         DEF CPXCODE
+        DEF CPLOOP
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -119,6 +122,7 @@ ASCIIS  ASP "CPM"
         ASP "CPXSTAT"
         ASP "CPABORT"
         ASP "CPXCODE"
+        ASP "CPLOOP"
 
 ERMSG   BYT 377
 
@@ -259,6 +263,73 @@ CPBUSY  LDM R26,=BSYMSG
         JSB =OUTSTR
 
 CPMRET  BIN
+        PAD
+        RTN
+
+! ---------------------------------------------------------------
+! B3a EXPERIMENTAL FOREGROUND PROBE -- do not replace the
+! hardware-verified CHIDLE-based CPM command until physically proven.
+! CPLOOP polls physical KEYSTS/KEYCOD from an ordinary BASIC statement
+! runtime, forwards a key once per key-down edge, then returns on K8.
+!
+! This is NOT YET a printer bridge; no HP-IB calls occur here.
+! The important property being measured is whether the HP keyboard
+! status registers stay responsive while the HP BASIC editor is not
+! servicing CHIDLE. K8 never reaches CP/M. No CHIDLE hook is touched.
+!
+! If the physical keyboard status is NOT polled correctly while a
+! statement is running, HP RESET is the experimental escape hatch.
+! Never run this test with unsaved HP BASIC work in memory.
+! ---------------------------------------------------------------
+        BYT 241
+CPLOOP  SAD
+        BIN
+        LDMD R14,=BINTAB
+        LDBD R20,X14,KHACT
+        CMB R20,=0
+        JNZ CPALRD       ! Existing CPM has the CHIDLE hook.
+        LDBD R20,=CHIDLE
+        CMB R20,=236
+        JNZ CPBUSY       ! A foreign hook owns the editor.
+        CLB R20
+        STBD R20,X14,CPLODOWN
+        LDM R26,=LPMSG
+        ADM R26,R14
+        LDM R36,=LPLEN,0
+        JSB =OUTSTR
+
+        LDB R20,=1
+        STBD R20,=CPCTL  ! Attach HP keyboard input, no CHIDLE use.
+
+CPLTOP  LDBD R22,=KEYSTS
+        ANB R22,=2      ! HP depressed flag, bit 1.
+        JZR CPLUP
+        LDBD R22,=KEYCOD
+        CMB R22,=207    ! K8 pressed, 0207 octal.
+        JZR CPLEXIT
+        LDMD R14,=BINTAB
+        LDBD R20,X14,CPLODOWN
+        CMB R20,=0
+        JNZ CPLWAIT     ! Suppress duplicate forwarding on hold.
+        LDB R20,=1
+        STBD R20,X14,CPLODOWN
+        STBD R22,=CPKEY
+        JMP CPLWAIT
+
+CPLUP   LDMD R14,=BINTAB
+        CLB R20
+        STBD R20,X14,CPLODOWN
+
+CPLWAIT LDM R56,=0,1
+CPLDLY  DCM R56
+        JNZ CPLDLY
+        JMP CPLTOP
+
+CPLEXIT CLB R20
+        STBD R20,=CPCTL
+        LDMD R14,=BINTAB
+        STBD R20,X14,CPLODOWN
+        BIN
         PAD
         RTN
 
@@ -964,6 +1035,7 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
+CPLODOWN BSZ 1       ! B3a foreground test: key-down edge state
 CPXCNT  BSZ 1           ! prompt-discovery grace count
 CPXRC   BSZ 1           ! last BASIC transfer result (CPXCODE)
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
@@ -976,11 +1048,13 @@ ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.06d FILE CONTROL"
+VERMSG   ASP "CPM85 0.07a LOOP PROBE"
+LPMSG    ASP "CPLOOP TEST - K8 TO EXIT"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
-VERLEN  EQU 24D
+VERLEN  EQU 22D
+LPLEN   EQU 24D
 
 ! HP-85 addresses, all OCTAL (copied from tested PRINTER85 LOADBIN).
 BINTAB  DAD 101233
