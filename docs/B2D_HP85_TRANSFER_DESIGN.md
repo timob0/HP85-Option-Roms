@@ -1,3 +1,23 @@
+## 2026-11-11 — Duplicate destination CPXCODE=2 confirmed on hardware
+
+User additionally confirmed the v0.06d duplicate-destination `CPIMPORT`
+test returns `CPXCODE=2`, accompanying native HP BASIC
+`Error 67: FILE NAME`. This closes the previously unverified numeric
+status-code assertion for the existing-file refusal scenario.
+
+Combined real-hardware confirmations: successful named SD export and
+import to F:, busy Multiplan import rejected with Error 74 /
+CPXCODE=1, and duplicate CP/M destination rejected with Error 67 /
+CPXCODE=2. No independently measured readback comparison of the
+existing destination was provided in this particular regression.
+
+Outstanding optional acceptance checks: absent destination after busy
+rejection (no delayed write), no-overwrite export to an existing
+literal SD filename, and BASIC ON ERROR handler integration.
+Do not merge to main without explicit user authorization.
+
+---
+
 ## 2026-11-11 — v0.06d duplicate-import protection physical regression
 
 User confirmed on physical HP-85 with B2d/CPM85 v0.06d that
