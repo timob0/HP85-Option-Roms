@@ -4,3 +4,12 @@ py311/
 *.bin
 *.dat
 
+manuals/*.gz
+manuals/*.toc
+manuals/*.aux
+manuals/*.log
+manuals/*.out
+manuals/*.fls
+manuals/*.fdb_latexmk
+
+build/*.lst
