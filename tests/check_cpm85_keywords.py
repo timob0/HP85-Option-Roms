@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPDIMGS", "CPDMK", "CPDCAT"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT", "CPXCODE"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -15,10 +15,11 @@ for a in names:
             assert not a.startswith(b), (a, b)
 # 0,55 octal = NO arguments, numeric function.  40,55 octal
 # indicates TWO numeric arguments and is only correct for TEST(x,y).
-assert text.count("        BYT 0,55") == 2
+assert text.count("        BYT 0,55") == 3
 assert "        BYT 40,55" not in text
 assert re.search(r"BYT 0,55\s*CNTFUN\s+BIN", text)
 assert re.search(r"BYT 0,55\s*LSTFUN\s+BIN", text)
+assert re.search(r"BYT 0,55\s*CPXCODE\s+BIN", text)
 # The user-verified keyboard ownership remains unchanged.
 assert "CMB R22,=207" in text
 assert "CPKEY   DAD 177741" in text and "CPCTL   DAD 177742" in text
@@ -33,7 +34,7 @@ print("PASS: unique alphabetic CPM85 keywords and 0-argument numeric descriptors
 
 # Drive control adds two HP BASIC string-expression parsers and keeps
 # original keyboard numeric functions' ABI and ISR forwarding untouched.
-assert "DEF TWOSTR" in text and "DEF ONESTR" in text
+assert "DEF TWOSTR" in text and "DEF ONESTR" in text and "DEF OPTEXP" in text
 assert "JSB =STREX+" in text and "JSB =STREXP" in text
 # HP-85 POMD/LDM/CMM/DCM extend to the NEXT register boundary.
 # R30/R32 (octal) span 2 bytes, whereas R40 spans EIGHT. The first
@@ -54,12 +55,20 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.04c DISK CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.06d FILE CONTROL"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
-for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPIMGS", "CPMAKE", "CPCAT"):
+for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
     assert re.search(r"^" + label + r"\s+BIN", text, re.M), label
-print("PASS: CPM85 CP/M drive-control ABI and string parsers")
+# CPRESET remains Z80-only opcode 4. New CPREBOOT uses the same
+# no-argument parser and reply path, but opcode 8 is Teensy-local.
+reset = text.split("CPRESE  BIN", 1)[1].split("CPRBOT  BIN", 1)[0]
+reboot = text.split("CPRBOT  BIN", 1)[1].split("CPUMNT  BIN", 1)[0]
+assert "LDB R22,=4" in reset and "JSB X14,CPGO" in reset
+assert "LDB R22,=10" in reboot and "JSB X14,CPGO" in reboot
+assert "LDB R22,=8\n" not in reboot  # bare 8 is invalid: CAPASM defaults to octal
+assert "JSB X14,CPCLR" in reboot and "POMD" not in reboot
+print("PASS: CPM85 CP/M drive-control ABI, CPREBOOT and string parsers")
 
 # HP CRT OUTCHR renders raw control bytes as graphics. Use the proven
 # byte-by-byte printable-char path, and OUTSTR only for actual CRT newline.
@@ -145,7 +154,8 @@ for start,end in (("OFFRUN  SAD", "VERRUN  LDM"),
 # reach CPGO, which handles success, error, timeout and reply-limit newlines.
 for start,end in (("CPCAT   BIN","CPBANN  BIN"),
                   ("CPSTAT  BIN","CPRESE  BIN"),
-                  ("CPRESE  BIN","CPUMNT  BIN"),
+                  ("CPRESE  BIN","CPRBOT  BIN"),
+                  ("CPRBOT  BIN","CPUMNT  BIN"),
                   ("CPUMNT  BIN","CPDMNT  BIN"),
                   ("CPDMNT  BIN","CPIMGS  BIN"),
                   ("CPIMGS  BIN","CPMAKE  BIN"),
@@ -163,4 +173,75 @@ assert "CPDONE  LDMD" in transport and "JZR CPFIN" in transport
 for start,end in (("CNTFUN  BIN","LSTFUN  BIN"),
                   ("LSTFUN  BIN","CPSTAT  BIN")):
     assert "JSB =OUTSTR" not in text.split(start,1)[1].split(end,1)[0]
-print("PASS: all ten CPM85 statements leave a fresh HP BASIC input line; numeric functions unchanged")
+print("PASS: all CPM85 statements including CPREBOOT leave a fresh HP BASIC line")
+
+# B2d v0.06a: quiet BASIC statements, trappable native errors and
+# no keyboard-dependent Continue/Abort prompt.
+assert 'DEF OPTEXP    ! CPEXPORT: one or two string expressions' in text
+assert 'DEF TWOSTR    ! CPIMPORT' in text
+assert 'DEF CPXCODE' in text and 'ASP "CPXCODE"' in text
+for label in ("CPEXPT","CPIMPT","CPXFER","CXQRY","CXDRN","CPXCODE",
+              "CXBUSY","CXCTRY","CXBERR","CXFERR"):
+    assert re.search(r"^"+label+r"\s+",text,re.M),label
+assert "LDB R22,=11       ! Octal 11 = decimal opcode 9" in text
+assert "LDB R22,=12       ! Octal 12 = decimal opcode 10" in text
+transfer=text.split("CPXFER  BIN",1)[1].split("\nCXQRY\n",1)[0]
+assert "JSB =OUTSTR" not in transfer and "JSB =OUTCHR" not in transfer
+assert "CXMSG1" not in transfer and "CXKEY" not in transfer
+assert "JSB =ERRORP" in transfer
+assert "BYT 74D" in transfer and "BYT 67D" in transfer
+assert "JSB X14,CXQRY" in transfer
+assert "LDB R22,=14" in transfer  # cancel pending before busy failure
+assert "CMB R20,=102      ! B could also be a transient CCP transition" in transfer
+assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
+assert "JZR CXWAIT" in transfer  # W/P have bounded grace
+assert "CMB R20,=122" in transfer  # running BDOS cannot be aborted
+assert "CPXRC   BSZ 1" in text
+assert 'ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"' in text
+startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
+assert "LDM R36,=30D,0" in startup
+assert 'VERMSG   ASP "CPM85 0.06d FILE CONTROL"' in text
+print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
+
+# Fail-safe: exhausting the unknown/armed grace MUST fall through into
+# CXBUSY remote CANCEL, not a backward loop/relay (regression v0.06a).
+assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in text
+assert "CXBUSY  LDB R20,=1\n        STBD R20,X14,CPXRC\n        JMP CXCTRY" in text
+assert "CXRELY JMP CXLOOP" in text
+assert "LDB R20,=8D" in transfer
+print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
+
+# v0.06b: a single BUSY phase at the CCP prompt must not trigger
+# instant cancellation; transition grace is bounded before CANCEL.
+assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
+assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in transfer
+assert 'VERMSG   ASP "CPM85 0.06d FILE CONTROL"' in text
+print("PASS: v0.06b safe CCP transient debounce")
+
+# v0.06c optional export destination, HP-85 four-byte string stack.
+assert "OPTEXP  PUBD R43,+R6" in text
+assert "CMB R14,=54" in text
+opt=text.split("OPTEXP  PUBD",1)[1].split("TWOSTR  PUBD",1)[0]
+assert "JSB =STREX+" in opt and "JSB =GETCMA" in opt
+assert "JSB =STREXP" in opt
+ex=text.split("CPEXPT  BIN",1)[1].split("CPIMPT  BIN",1)[0]
+assert "CMMD R20,=TOS" in ex and "SBM R20,=4,0" in ex
+assert "POMD R26,-R12" in ex and "POMD R24,-R12" in ex
+assert "CPEXONE" in ex and "STBD R20,=CPARG" in ex
+assert "TOS     DAD 101132" in text
+assert "CMB R20,=105      ! E: transport/ownership rejection" in transfer
+print("PASS: optional CPEXPORT parser, HP-85 stack arity, E-phase separation")
+
+# v0.06d hardware regression: status response must be fully consumed
+# before issuing another Teensy mailbox opcode (state clears on NUL).
+# Diagnostic CPXSTAT/CPABORT instead leave body for CPREAD to display.
+transfer=text.split("CPXFER  BIN",1)[1].split("! Numeric last-transfer status",1)[0]
+assert transfer.count("JSB X14,CXQST")==3
+assert "JSB X14,CXQRY" not in transfer
+wrapper=text.split("\nCXQST\n",1)[1].split("\nCXQRY\n",1)[0]
+assert "JSB X14,CXQRY" in wrapper
+assert "JSB X14,CXDRN" in wrapper
+assert wrapper.index("JSB X14,CXQRY") < wrapper.index("JSB X14,CXDRN")
+diagnostics=text.split("CXSHOW  LDMD",1)[1].split("CPXFER  BIN",1)[0]
+assert "JSB X14,CXQRY" in diagnostics and "JSB X14,CPREAD" in diagnostics
+print("PASS: full mailbox NUL drain on START/STATUS/CANCEL while diagnostics retain text")
