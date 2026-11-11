@@ -4,3 +4,13 @@ py311/
 *.bin
 *.dat
 
+
+# Locally rendered pocket guides: keep editable LaTeX sources in Git.
+/manuals/*.pdf
+/manuals/*.aux
+/manuals/*.log
+/manuals/*.out
+/manuals/*.toc
+/manuals/*.synctex.gz
+/manuals/*.fls
+/manuals/*.fdb_latexmk
