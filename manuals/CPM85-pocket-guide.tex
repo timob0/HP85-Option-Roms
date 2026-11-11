@@ -6,7 +6,7 @@
 \tableofcontents\newpage
 \section{Getting Started}
 CPM85 adds BASIC statements for using a parallel Z80 CP/M 2.2 environment, managing mounted disk images, and transferring files to/from the Teensy SD card.
-\setup{EBTKS}Use matching Teensy and ESP32 firmware with the native Z80 CP/M bridge and HP drive-control mailbox. Keep \texttt{\"CRTRemote\": true} in the Teensy \texttt{CONFIG.TXT} (required by the tested ESP32 polling integration); place CP/M disk images under \texttt{/cpm/disks} and transfer files under \texttt{/cpm/transfers} on the Teensy SD card. Load the CPM85 binary with \texttt{LOAD BIN "CPM85"} (adjust the host file name to your installation). If PRINTER85 has captured keyboard keys, run \texttt{PRTKEYS 0} first.
+\setup{EBTKS}Use matching Teensy and ESP32 firmware with the native Z80 CP/M bridge and HP drive-control mailbox. Keep \texttt{CRTRemote: true} in the Teensy \texttt{CONFIG.TXT} (required by the tested ESP32 polling integration); place CP/M disk images under \texttt{/cpm/disks} and transfer files under \texttt{/cpm/transfers} on the Teensy SD card. Load the CPM85 binary with \texttt{LOAD BIN "CPM85"} (adjust the host file name to your installation). If PRINTER85 has captured keyboard keys, run \texttt{PRTKEYS 0} first.
 \setup{First test}With CP/M at its \texttt{A>} prompt, enter \texttt{CPVER}, \texttt{CPSTATUS} and \texttt{CPM}. Press K8 to return to HP BASIC; CP/M continues running.
 \section{Console \& Status}
 \entry{CPM}{CPM}{Connects the HP-85 keyboard to CP/M. Shows \texttt{CONNECTED TO CP/M - K8 TO EXIT}. K8 detaches keyboard without stopping CP/M.}{CPM}
