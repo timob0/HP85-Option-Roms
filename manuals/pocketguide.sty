@@ -9,6 +9,8 @@
 \RequirePackage{fancyhdr}
 \RequirePackage{titlesec}
 \RequirePackage{hyperref}
+\RequirePackage{graphicx}
+\RequirePackage{float}
 \definecolor{hporange}{HTML}{AD551A}
 \definecolor{hpink}{HTML}{292321}
 \hypersetup{hidelinks,pdfcreator={SIMON85 project pocket guides}}
@@ -23,35 +25,58 @@
 \fancyfoot[C]{\scriptsize\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
 \renewcommand{\footrulewidth}{0pt}
-\titleformat{\section}{\normalsize\bfseries\color{hporange}}{}{0pt}{}[\vspace{-3pt}\hrule]
+\titleformat{\section}{\normalsize\bfseries\sffamily}{}{0pt}{}
 \titlespacing*{\section}{0pt}{7pt}{3pt}
 \titleformat{\subsection}{\small\bfseries\color{hporange}}{}{0pt}{}
 \titlespacing*{\subsection}{0pt}{5pt}{1pt}
-\newcommand{\pocketcover}[3]{%
+\newcommand{\pocketcover}[4]{%
 \begin{titlepage}\thispagestyle{empty}
-\vspace*{21mm}
-\begin{center}
+\begin{flushright}
 {\small\bfseries THE SIMON85 PROJECT}\par
-\vspace{6mm}\rule{\linewidth}{.5pt}\par
 \vspace{9mm}{\Huge\bfseries #1}\par
 \vspace{4mm}{\Large Pocket Guide}\par
-\vspace{7mm}\rule{\linewidth}{.5pt}\par
-\vfill
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{#4}
+\end{figure}
+\end{flushright}
+\newpage
+\vspace*{21mm}
+\begin{center}
 {\small #2}\par
 \vspace{2mm}{\footnotesize #3}\par
 \vspace{11mm}
-{\scriptsize An independent HP-85 extension reference}\par
-\end{center}\end{titlepage}
+{\footnotesize An independent HP-85 extension reference}\par
+\end{center}
+\vfill
+\begin{scriptsize}
+Copyright 2026 Timo Biesenbach
+
+This manual and the associated materials are licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file and the associated software except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Parts of this manual and the associated materials were AI generated using OpenAI code models.
+\end{scriptsize}
+\end{titlepage}
 }
 \newcommand{\entry}[4]{%
 \par\medskip
-{\color{hporange}\bfseries #1}\par
-{\footnotesize\ttfamily\detokenize{#2}}\par
+{\color{hporange}\bfseries\sffamily #1}
+% {\footnotesize\ttfamily\detokenize{#2}}\par
 \vspace{1pt}
-{\small #3}\par
+{\footnotesize #3}\par
 {\footnotesize\color{hporange}\texttt{\detokenize{#4}}}\par
 }
 \newcommand{\key}[1]{\textbf{#1}}
 \newcommand{\setup}[1]{\noindent\textbf{#1}\quad}
 \newcommand{\note}[1]{\par\smallskip{\footnotesize\itshape #1}\par}
-\AtBeginDocument{\small}
+\AtBeginDocument{\footnotesize}

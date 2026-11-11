@@ -2,8 +2,8 @@
 \newcommand{\GuideName}{PRINTER85}
 \usepackage{pocketguide}
 \begin{document}
-\pocketcover{PRINTER85}{Printer and hardcopy extension for HP-85 BASIC}{Option ROM 0241 (octal)\\Source: printer85\_rom.asm, v0.03b RC1c}
-\tableofcontents\newpage
+\pocketcover{PRINTER85}{Printer and hardcopy extension for HP-85 BASIC}{Option ROM 0241 (octal)\\Source: printer85\_rom.asm, v0.03b RC1c}{printer85.png}
+\tableofcontents
 \section{Getting Started}
 PRINTER85 drives external printers and optionally replaces the HP-85's internal COPY and PAPER ADVANCE keys. The ROM does not take over these keys automatically.
 \setup{EBTKS}Copy the built PRINTER85 option-ROM image (ROM 0241 octal) to the SD-card \texttt{/roms85} directory and enable it in your existing \texttt{CONFIG.TXT}. Reboot to load. Connect your printer on HP-IB and use its selected device address in \texttt{PRTSET}.
