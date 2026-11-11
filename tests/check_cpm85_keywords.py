@@ -55,7 +55,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.07a LOOP PROBE"' in text
+assert 'VERMSG   ASP "CPM85 0.07b LOOP PROBE"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -200,7 +200,7 @@ assert "CPXRC   BSZ 1" in text
 assert 'ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"' in text
 startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
 assert "LDM R36,=30D,0" in startup
-assert 'VERMSG   ASP "CPM85 0.07a LOOP PROBE"' in text
+assert 'VERMSG   ASP "CPM85 0.07b LOOP PROBE"' in text
 print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
 
 # Fail-safe: exhausting the unknown/armed grace MUST fall through into
@@ -215,7 +215,7 @@ print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
 # instant cancellation; transition grace is bounded before CANCEL.
 assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
 assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in transfer
-assert 'VERMSG   ASP "CPM85 0.07a LOOP PROBE"' in text
+assert 'VERMSG   ASP "CPM85 0.07b LOOP PROBE"' in text
 print("PASS: v0.06b safe CCP transient debounce")
 
 # v0.06c optional export destination, HP-85 four-byte string stack.
@@ -254,5 +254,7 @@ assert "STBD R22,=CPKEY" in probe and "STBD R20,=CPCTL" in probe
 assert "JSB =EOJ2" not in probe and "JSB =HPOUT" not in probe
 assert "JMP CPLTOP" in probe and "PAD" in probe and "RTN" in probe
 assert "ADM R54,=1,0" in probe and "CMM R54,=0,100" in probe
+assert "STBD R22,X14,KLAST" in probe
+assert "STBD R20,X14,KCOUNT" in probe
 assert probe.index("CMB R22,=207") < probe.index("STBD R22,=CPKEY")
 print("PASS: B3a separate foreground polling probe and K8 local detach")
