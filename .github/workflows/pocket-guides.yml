@@ -1,7 +1,7 @@
 name: Pocket guide source synchronization
 on:
   push:
-    branches: [main, docs/pocket-guides-and-cleanup]
+    branches: [main, docs/pocket-guides-and-cleanup, feature/cpm-hpib-print-bridge]
     paths:
       - 'manuals/**'
       - 'src/SIMON85_rom.asm'
