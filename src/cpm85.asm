@@ -295,7 +295,7 @@ CPLOOP  SAD
         STBD R20,X14,CPLODOWN
         LDM R26,=LPMSG
         ADM R26,R14
-        LDM R36,=LPLEN,0
+        LDM R36,=24D,0
         JSB =OUTSTR
 
         LDB R20,=1
