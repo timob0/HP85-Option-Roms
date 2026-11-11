@@ -1,0 +1,42 @@
+\documentclass[10pt]{article}
+\newcommand{\GuideName}{CPM85}
+\usepackage{pocketguide}
+\begin{document}
+\pocketcover{CPM85}{HP-85 BASIC control of native CP/M}{LOADBIN CPM85, v0.06d\\Requires matching EBTKS and ESP32 B2d firmware}
+\tableofcontents\newpage
+\section{Getting Started}
+CPM85 adds BASIC statements for using a parallel Z80 CP/M 2.2 environment, managing mounted disk images, and transferring files to/from the Teensy SD card.
+\setup{EBTKS}Use firmware with the native Z80 CP/M bridge and HP drive-control mailbox; place CP/M disk images under \texttt{/cpm/disks} and transfer files under \texttt{/cpm/transfers} on the Teensy SD card. Load the CPM85 binary with \texttt{LOAD BIN "CPM85"} (adjust the host file name to your installation). If PRINTER85 has captured keyboard keys, run \texttt{PRTKEYS 0} first.
+\setup{First test}With CP/M at its \texttt{A>} prompt, enter \texttt{CPVER}, \texttt{CPSTATUS} and \texttt{CPM}. Press K8 to return to HP BASIC; CP/M continues running.
+\section{Console \& Status}
+\entry{CPM}{CPM}{Connects the HP-85 keyboard to CP/M. Shows \texttt{CONNECTED TO CP/M - K8 TO EXIT}. K8 detaches keyboard without stopping CP/M.}{CPM}
+\entry{CPOFF}{CPOFF}{Releases CPM85 keyboard capture (when HP BASIC control is available).}{CPOFF}
+\entry{CPVER}{CPVER}{Reports the installed CPM85 binary version.}{CPVER}
+\entry{CPCOUNT}{CPCOUNT}{Numeric function returning number of captured keys modulo 256.}{PRINT CPCOUNT}
+\entry{CPLAST}{CPLAST}{Numeric function returning the last raw HP keyboard code, including K8.}{PRINT CPLAST}
+\entry{CPSTATUS}{CPSTATUS}{Lists active and pending CP/M drive-image assignments.}{CPSTATUS}
+\section{Disk Images}
+\entry{CPDIMGS}{CPDIMGS}{Lists available disk image filenames in the SD-card \texttt{/cpm/disks} directory.}{CPDIMGS}
+\entry{CPDMK}{CPDMK "image.dsk"}{Creates a new empty 8 MiB CP/M hard-disk image on SD, without replacing an existing one.}{CPDMK "WORK.DSK"}
+\entry{CPDMNT}{CPDMNT "drive:","image.dsk"}{Stages a disk-image mount for the selected CP/M drive. Apply with CPRESET while CP/M is idle.}{CPDMNT "F:","WORK.DSK"}
+\entry{CPDUMNT}{CPDUMNT "drive:"}{Stages unmount of a CP/M drive. Requires CPRESET to apply.}{CPDUMNT "F:"}
+\entry{CPRESET}{CPRESET}{Resets the emulated Z80/CP/M system and applies pending disk assignments; HP-85 itself continues running. Save CP/M work first.}{CPRESET}
+\entry{CPREBOOT}{CPREBOOT}{Reboots the ESP32 and its services. HP-85 remains powered on; CP/M and Wi-Fi sessions are interrupted.}{CPREBOOT}
+\entry{CPDCAT}{CPDCAT "drive:"}{Displays the selected CP/M drive directory using native read-only BDOS access. Run at an idle CP/M command prompt.}{CPDCAT "A:"}
+\section{File Transfer}
+Transfers are blocking HP BASIC statements. They complete silently on success. CP/M must be idle at its command prompt; no active application may be using BDOS. Existing destination files are never overwritten.
+\entry{CPEXPORT}{CPEXPORT "drive:file"[, "sd-name"]}{Copies one CP/M 8.3 file to the Teensy SD-card \texttt{/cpm/transfers} directory. Default SD filename is the drive prefix plus underscore (for example \texttt{A\_PIP.COM}); optional second string gives a different relative SD name.}{CPEXPORT "A:PIP.COM","PIPB2D.COM"}
+\entry{CPIMPORT}{CPIMPORT "sd-name","drive:file"}{Copies one literal SD transfer file into a NEW CP/M 8.3 destination. The first operand is an SD filename (no CP/M drive colon).}{CPIMPORT "PIPB2D.COM","F:PIP.COM"}
+\entry{CPXCODE}{CPXCODE}{Numeric function giving the last transfer result: 0 success; 1 CP/M not idle; 2 file operation failed; 3 transport/transaction uncertain; 4 transfer entered BDOS (normally replaced by terminal result).}{PRINT CPXCODE}
+\entry{CPXSTAT}{CPXSTAT}{Displays diagnostic status of the outstanding/most recent transfer, especially after BASIC STOP or a communication failure.}{CPXSTAT}
+\entry{CPABORT}{CPABORT}{Requests cancellation of a pending transfer before guest BDOS starts. Does NOT interrupt a running BDOS file operation.}{CPABORT}
+\section{Errors \& Safety}
+\textbf{ERROR 74 (STALL)} with \texttt{CPXCODE=1} means CP/M is not idle. Confirm the command prompt, then retry. The cancelled transfer does not create a file later.
+\par\smallskip
+\textbf{ERROR 67 (FILE NAME)} with \texttt{CPXCODE=2} reports a file/storage failure, including attempted overwrite of an existing destination.
+\par\smallskip
+\textbf{CPXCODE=3} means transport/transaction status is uncertain. Inspect \texttt{CPXSTAT}; do not restart or reset an unresolved transfer blindly.
+\par\smallskip
+HP BASIC programs can trap native errors using \texttt{ON ERROR GOTO} or \texttt{ON ERROR GOSUB} and inspect \texttt{ERRN}. Check the HP-85 Pocket Guide for normal BASIC handler behavior.
+\note{The three CPM85 transfer operations rely on the matching B2d ESP32 and Teensy protocols. Do not mix firmware versions when updating.}
+\end{document}

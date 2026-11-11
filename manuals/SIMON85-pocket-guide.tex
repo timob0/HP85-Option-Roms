@@ -1,0 +1,42 @@
+\documentclass[10pt]{article}
+\newcommand{\GuideName}{SIMON85}
+\usepackage{pocketguide}
+\begin{document}
+\pocketcover{SIMON85}{Graphics extension for HP-85 BASIC}{Option ROM 0102 (octal)\\Source: SIMON85\_rom.asm, v0.13a2}
+\tableofcontents
+\newpage
+\section{Getting Started}
+SIMON85 extends HP-85 BASIC with drawing, filled shapes and pixel operations. It is independent of PRINTER85.
+\setup{EBTKS}Copy the built SIMON85 option-ROM image (ROM 0102 octal) to the EBTKS SD-card ROM directory and enable that ROM in CONFIG.TXT. A reboot/power cycle loads the option ROM. The HP Printer/Plotter ROM 0360 (octal) must also be installed.
+\setup{Test}Enter \texttt{SVER}. Then try:
+\begin{verbatim}
+GRAPH
+SCALE 0,100,0,100
+CIRCLE 50,50,25,25,1
+\end{verbatim}
+\section{Syntax}
+Numbers may be BASIC numeric expressions. Coordinates obey the current graphics scale. The final parameter \texttt{f} means \textbf{0} clear, \textbf{1} set and \textbf{2} XOR. Use the native \texttt{GRAPH}, \texttt{GCLEAR} and \texttt{SCALE} commands to prepare the display.
+\section{Commands}
+\entry{SVER}{SVER}{Reports the installed SIMON85 ROM version.}{SVER}
+\entry{BLOCK}{BLOCK x1,y1,x2,y2,f}{Draws a rectangular block bounded by two opposite corners. The drawing mode is specified by \texttt{f}.}{BLOCK 10,10,40,30,1}
+\entry{HIRES}{HIRES j,k}{Provides the SIMON85 high-resolution graphics operation with two numeric arguments. Use with the ROM's graphics coordinate conventions.}{HIRES 10,10}
+\entry{LINE}{LINE x1,y1,x2,y2,f}{Draws a line segment between the two specified endpoints using the requested pixel mode.}{LINE 10,10,85,70,1}
+\entry{REC}{REC x,y,width,height,f}{Draws a rectangle from an origin and its width and height.}{REC 20,20,35,25,1}
+\entry{ARC}{ARC mx,my,ws,we,ww,rx,ry,f}{Draws an elliptical arc centered at \texttt{mx,my}; angle parameters describe the arc and radii control its dimensions.}{ARC 50,50,0,90,1,30,20,1}
+\entry{CIRCLE}{CIRCLE x,y,rx,ry,f[,n]}{Draws an ellipse or circle with center and horizontal/vertical radii. Optional \texttt{n} controls the approximation/segment count.}{CIRCLE 50,50,20,20,1}
+\entry{ANGL}{ANGL x,y,w,rx,ry,f}{Draws a radial-angle shape using center, angle, radii and drawing mode.}{ANGL 50,50,45,25,25,1}
+\entry{PAINT}{PAINT x,y,f}{Flood-fills the bounded region containing the starting point, using the requested pixel operation.}{PAINT 30,30,1}
+\entry{PLOTP}{PLOTP x,y,f}{Sets, clears or XORs one scaled graphics pixel. Named \texttt{PLOTP} to avoid collision with HP BASIC's \texttt{PLOTTER} keyword.}{PLOTP 10,10,1}
+\entry{TEST}{TEST(x,y)}{Returns 1 if a mapped CRT pixel is set; otherwise returns 0, including points outside the screen. CRT-only; no plotter output.}{PRINT TEST(10,10)}
+\section{Quick Example}
+\begin{verbatim}
+10 GRAPH
+20 GCLEAR
+30 SCALE 0,100,0,100
+40 REC 10,10,70,70,1
+50 CIRCLE 45,45,20,20,1
+60 PAINT 45,45,1
+70 PRINT TEST(45,45)
+\end{verbatim}
+\note{If a shape looks different with a nondefault SCALE, check the selected graphics scale and drawing mode before assuming a hardware fault.}
+\end{document}

@@ -1,0 +1,40 @@
+\documentclass[10pt]{article}
+\newcommand{\GuideName}{PRINTER85}
+\usepackage{pocketguide}
+\begin{document}
+\pocketcover{PRINTER85}{Printer and hardcopy extension for HP-85 BASIC}{Option ROM 0241 (octal)\\Source: printer85\_rom.asm, v0.03b RC1c}
+\tableofcontents\newpage
+\section{Getting Started}
+PRINTER85 drives external printers and optionally replaces the HP-85's internal COPY and PAPER ADVANCE keys. The ROM does not take over these keys automatically.
+\setup{EBTKS}Copy the built PRINTER85 option-ROM image (ROM 0241 octal) to the SD-card ROM directory and enable it in CONFIG.TXT. Reboot to load. Connect your printer on HP-IB and use its selected device address in \texttt{PRTSET}.
+\setup{Drivers}Driver 1: HP ThinkJet 2225A in HP control-sequence mode (switch 5 DOWN). Driver 2: SII IFD501/CAPD345A thermal printer. For SII paper cutting, enable the printer's autocutter using its persistent printer configuration software.
+\setup{First test}
+\begin{verbatim}
+PVER
+PRTSET 701,2,1,0
+PRTSCREEN 701,2,1,0
+PRTKEYS 1
+\end{verbatim}
+\emph{Replace 701 with the output device code for your own HP-IB printer. Verify the correct HP BASIC device code in your configuration before printing.}
+\section{Commands}
+\entry{PVER}{PVER}{Displays the installed PRINTER85 version string.}{PVER}
+\entry{PRTSCREEN}{PRTSCREEN device,driver[,zoom[,orientation]]}{Prints the current HP-85 CRT image using the specified device and printer driver. One-shot operation; does not change the stored COPY profile.}{PRTSCREEN 701,2,1,0}
+\entry{PRTSET}{PRTSET device,driver[,zoom[,orientation]]}{Stores the printer/device, driver, hardcopy zoom and orientation used by physical COPY/PAPER and text-style controls.}{PRTSET 701,1,2,0}
+\entry{PRTKEYS}{PRTKEYS mode}{With 1, enables the replacement COPY/PAPER keys and native K1--K8 printer panel. With 0, restores the previous keyboard handling and key labels.}{PRTKEYS 1}
+\entry{PRTPITCH}{PRTPITCH pitch}{Sets text pitch: 0 normal, 1 expanded, 2 compressed, 3 expanded-compressed. Requires a configured printer profile.}{PRTPITCH 2}
+\entry{PRTLPI}{PRTLPI lines}{Sets vertical text spacing to 6 or 8 lines per inch on the configured printer.}{PRTLPI 8}
+\entry{PRTBOLD}{PRTBOLD mode}{Enables (1) or disables (0) bold text on the configured printer.}{PRTBOLD 1}
+\entry{PRTUNDER}{PRTUNDER mode}{Enables (1) or disables (0) underlined text.}{PRTUNDER 1}
+\entry{PRTNORM}{PRTNORM}{Resets common text styles: normal pitch, 6 lines per inch, bold and underline off.}{PRTNORM}
+\entry{PRTZOOM}{PRTZOOM zoom}{Changes the stored COPY enlargement. Values 1 or 2 for supported printers, and 4 where supported by ThinkJet.}{PRTZOOM 2}
+\entry{PRTORIENT}{PRTORIENT orientation}{Sets stored COPY orientation: 0 portrait, 1 clockwise landscape, subject to driver capability.}{PRTORIENT 0}
+\section{Keyboard Panel}
+After \texttt{PRTSET} and \texttt{PRTKEYS 1}, COPY sends a text or graphics hardcopy based on the current screen mode. PAPER ADVANCE feeds paper.
+\begin{tabular}{ll}
+K1&Text pitch\\K2&Bold\\K3&COPY zoom\\K4&Previous panel\\
+K5&Lines per inch\\K6&Underline\\K7&COPY orientation\\K8&Next panel
+\end{tabular}
+\par\smallskip
+On the SII autocutter-equipped printer, \key{SHIFT+PAPER ADVANCE} performs a cut when the device autocutter is enabled. On ThinkJet it performs form feed.
+\note{PRTKEYS and CPM85 both need keyboard ownership; use PRTKEYS 0 before entering CPM85 keyboard mode.}
+\end{document}
