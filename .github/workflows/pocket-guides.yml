@@ -1,0 +1,25 @@
+name: Pocket guide source synchronization
+on:
+  push:
+    branches: [main, docs/pocket-guides-and-cleanup]
+    paths:
+      - 'manuals/**'
+      - 'src/SIMON85_rom.asm'
+      - 'src/printer85_rom.asm'
+      - 'src/cpm85.asm'
+      - 'tests/check_pocket_guides.py'
+      - '.github/workflows/pocket-guides.yml'
+  pull_request:
+    paths:
+      - 'manuals/**'
+      - 'src/SIMON85_rom.asm'
+      - 'src/printer85_rom.asm'
+      - 'src/cpm85.asm'
+      - 'tests/check_pocket_guides.py'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify guide command coverage, version and EBTKS setup section
+        run: python3 tests/check_pocket_guides.py
