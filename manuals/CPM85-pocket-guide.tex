@@ -10,7 +10,7 @@ CPM85 adds BASIC statements for using a parallel Z80 CP/M 2.2 environment, manag
 \setup{First test}With CP/M at its \texttt{A>} prompt, enter \texttt{CPVER}, \texttt{CPSTATUS} and \texttt{CPM}. Press K8 to return to HP BASIC; CP/M continues running.
 \section{Console \& Status}
 \entry{CPM}{CPM}{Connects the HP-85 keyboard to CP/M. Shows \texttt{CONNECTED TO CP/M - K8 TO EXIT}. K8 detaches keyboard without stopping CP/M.}{CPM}
-\entry{CPLOOP}{CPLOOP}{EXPERIMENTAL B3a diagnostic. Runs a foreground HP keyboard polling loop, forwards one event per physical keypress and exits on K8. Does not yet service a printer. Test only with saved HP BASIC work; if keyboard polling fails, HP RESET may be required. The proven CPM mode is unchanged.}{CPLOOP}
+\entry{CPLOOP}{CPLOOP}{EXPERIMENTAL B3a diagnostic. Runs a foreground HP keyboard polling loop, forwards one event per physical keypress and exits on K8. Does not yet service a printer. The probe has a bounded automatic exit; test only with saved HP BASIC work, as HP RESET might still be necessary after an unexpected machine lock. The proven CPM mode is unchanged.}{CPLOOP}
 \entry{CPOFF}{CPOFF}{Releases CPM85 keyboard capture (when HP BASIC control is available).}{CPOFF}
 \entry{CPVER}{CPVER}{Reports the installed CPM85 binary version.}{CPVER}
 \entry{CPCOUNT}{CPCOUNT}{Numeric function returning number of captured keys modulo 256.}{PRINT CPCOUNT}
