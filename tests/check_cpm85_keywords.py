@@ -253,5 +253,6 @@ assert "LDBD R22,=KEYCOD" in probe and "CMB R22,=207" in probe
 assert "STBD R22,=CPKEY" in probe and "STBD R20,=CPCTL" in probe
 assert "JSB =EOJ2" not in probe and "JSB =HPOUT" not in probe
 assert "JMP CPLTOP" in probe and "PAD" in probe and "RTN" in probe
+assert "ADM R54,=1,0" in probe and "CMM R54,=0,100" in probe
 assert probe.index("CMB R22,=207") < probe.index("STBD R22,=CPKEY")
 print("PASS: B3a separate foreground polling probe and K8 local detach")
