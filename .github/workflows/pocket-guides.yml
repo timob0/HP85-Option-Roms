@@ -1,0 +1,47 @@
+name: Pocket guide source synchronization
+on:
+  push:
+    branches: [main, docs/pocket-guides-and-cleanup]
+    paths:
+      - 'manuals/**'
+      - 'src/SIMON85_rom.asm'
+      - 'src/printer85_rom.asm'
+      - 'src/cpm85.asm'
+      - 'tests/check_pocket_guides.py'
+      - '.github/workflows/pocket-guides.yml'
+  pull_request:
+    paths:
+      - 'manuals/**'
+      - 'src/SIMON85_rom.asm'
+      - 'src/printer85_rom.asm'
+      - 'src/cpm85.asm'
+      - 'tests/check_pocket_guides.py'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify guide command coverage, version and EBTKS setup section
+        run: python3 tests/check_pocket_guides.py
+  latex:
+    name: Compile all three pocket guides
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LaTeX packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended
+      - name: Compile each guide twice (TOC and pagination)
+        run: |
+          cd manuals
+          for name in SIMON85 PRINTER85 CPM85; do
+            pdflatex -halt-on-error -interaction=nonstopmode "$name-pocket-guide.tex"
+            pdflatex -halt-on-error -interaction=nonstopmode "$name-pocket-guide.tex"
+            test -s "$name-pocket-guide.pdf"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hp85-pocket-guides-preview
+          path: manuals/*-pocket-guide.pdf
+          if-no-files-found: error

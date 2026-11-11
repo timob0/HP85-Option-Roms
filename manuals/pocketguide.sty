@@ -1,0 +1,57 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{pocketguide}[2026/11/11 SIMON85 pocket guide style]
+% Original small-format reference typography inspired by 1980 HP pocket guides.
+% No Hewlett-Packard artwork or trademarks reproduced.
+\RequirePackage[paperwidth=86mm,paperheight=152mm,top=13mm,bottom=12mm,left=9mm,right=9mm,headheight=8mm,headsep=2mm,footskip=7mm]{geometry}
+\RequirePackage[T1]{fontenc}
+\RequirePackage{mathptmx}
+\RequirePackage{xcolor}
+\RequirePackage{fancyhdr}
+\RequirePackage{titlesec}
+\RequirePackage{hyperref}
+\definecolor{hporange}{HTML}{AD551A}
+\definecolor{hpink}{HTML}{292321}
+\hypersetup{hidelinks,pdfcreator={SIMON85 project pocket guides}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlength{\emergencystretch}{2em}
+\raggedbottom
+\color{hpink}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\scriptsize\bfseries \GuideName\enspace POCKET GUIDE}
+\fancyfoot[C]{\scriptsize\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0pt}
+\titleformat{\section}{\normalsize\bfseries\color{hporange}}{}{0pt}{}[\vspace{-3pt}\hrule]
+\titlespacing*{\section}{0pt}{7pt}{3pt}
+\titleformat{\subsection}{\small\bfseries\color{hporange}}{}{0pt}{}
+\titlespacing*{\subsection}{0pt}{5pt}{1pt}
+\newcommand{\pocketcover}[3]{%
+\begin{titlepage}\thispagestyle{empty}
+\vspace*{21mm}
+\begin{center}
+{\small\bfseries THE SIMON85 PROJECT}\par
+\vspace{6mm}\rule{\linewidth}{.5pt}\par
+\vspace{9mm}{\Huge\bfseries #1}\par
+\vspace{4mm}{\Large Pocket Guide}\par
+\vspace{7mm}\rule{\linewidth}{.5pt}\par
+\vfill
+{\small #2}\par
+\vspace{2mm}{\footnotesize #3}\par
+\vspace{11mm}
+{\scriptsize An independent HP-85 extension reference}\par
+\end{center}\end{titlepage}
+}
+\newcommand{\entry}[4]{%
+\par\medskip
+{\color{hporange}\bfseries #1}\par
+{\footnotesize\ttfamily\detokenize{#2}}\par
+\vspace{1pt}
+{\small #3}\par
+{\footnotesize\color{hporange}\texttt{\detokenize{#4}}}\par
+}
+\newcommand{\key}[1]{\textbf{#1}}
+\newcommand{\setup}[1]{\noindent\textbf{#1}\quad}
+\newcommand{\note}[1]{\par\smallskip{\footnotesize\itshape #1}\par}
+\AtBeginDocument{\small}
