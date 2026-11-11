@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT", "CPXCODE"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT", "CPXCODE", "CPLOOP"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -55,7 +55,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.06d FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.07a LOOP PROBE"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -200,7 +200,7 @@ assert "CPXRC   BSZ 1" in text
 assert 'ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"' in text
 startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
 assert "LDM R36,=30D,0" in startup
-assert 'VERMSG   ASP "CPM85 0.06d FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.07a LOOP PROBE"' in text
 print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
 
 # Fail-safe: exhausting the unknown/armed grace MUST fall through into
@@ -215,7 +215,7 @@ print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
 # instant cancellation; transition grace is bounded before CANCEL.
 assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
 assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in transfer
-assert 'VERMSG   ASP "CPM85 0.06d FILE CONTROL"' in text
+assert 'VERMSG   ASP "CPM85 0.07a LOOP PROBE"' in text
 print("PASS: v0.06b safe CCP transient debounce")
 
 # v0.06c optional export destination, HP-85 four-byte string stack.
@@ -245,3 +245,13 @@ assert wrapper.index("JSB X14,CXQRY") < wrapper.index("JSB X14,CXDRN")
 diagnostics=text.split("CXSHOW  LDMD",1)[1].split("CPXFER  BIN",1)[0]
 assert "JSB X14,CXQRY" in diagnostics and "JSB X14,CPREAD" in diagnostics
 print("PASS: full mailbox NUL drain on START/STATUS/CANCEL while diagnostics retain text")
+
+# B3a experimental foreground keyboard session: separate from known-good CPM.
+probe=text.split("CPLOOP  SAD",1)[1].split("! Optional manual release",1)[0]
+assert "LDBD R22,=KEYSTS" in probe and "ANB R22,=2" in probe
+assert "LDBD R22,=KEYCOD" in probe and "CMB R22,=207" in probe
+assert "STBD R22,=CPKEY" in probe and "STBD R20,=CPCTL" in probe
+assert "JSB =EOJ2" not in probe and "JSB =HPOUT" not in probe
+assert "JMP CPLTOP" in probe and "PAD" in probe and "RTN" in probe
+assert probe.index("CMB R22,=207") < probe.index("STBD R22,=CPKEY")
+print("PASS: B3a separate foreground polling probe and K8 local detach")
