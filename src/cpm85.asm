@@ -358,6 +358,8 @@ CPLSTOK LDBD R20,X14,HTPREV
         LDBD R20,X14,KCHGS
         ADB R20,=1
         STBD R20,X14,KCHGS
+        JMP CPLHTOK   ! Skip the backward-jump relay in normal flow.
+CPLBACK JMP CPLTOP    ! Two short relative hops avoid CAPASM range limit.
 CPLHTOK LDBD R22,X14,STVAL
         ANM R22,=2
         JZR CPLUP
@@ -392,7 +394,7 @@ CPLDLY  DCM R56
         ADM R54,=1,0
         CMM R54,=0,100  ! 16384 bounded idle iterations.
         JZR CPLEXIT     ! Automatic exit if K8 polling is ineffective.
-        JMP CPLTOP
+        JMP CPLBACK     ! Back edge via nearby relative-jump relay.
 
 CPLEXIT CLB R20
         STBD R20,=CPCTL
