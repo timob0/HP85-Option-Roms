@@ -292,7 +292,7 @@ CPLOOP  SAD
         CMB R20,=236
         JNZ CPBUSY       ! A foreign hook owns the editor.
         CLB R20
-        STBD R20,X14,CPLODOWN
+        STBD R20,X14,CPDOWN
         LDM R26,=LPMSG
         ADM R26,R14
         LDM R36,=24D,0
@@ -302,23 +302,23 @@ CPLOOP  SAD
         STBD R20,=CPCTL  ! Attach HP keyboard input, no CHIDLE use.
 
 CPLTOP  LDBD R22,=KEYSTS
-        ANB R22,=2      ! HP depressed flag, bit 1.
+        ANM R22,=2      ! HP depressed flag, bit 1.
         JZR CPLUP
         LDBD R22,=KEYCOD
         CMB R22,=207    ! K8 pressed, 0207 octal.
         JZR CPLEXIT
         LDMD R14,=BINTAB
-        LDBD R20,X14,CPLODOWN
+        LDBD R20,X14,CPDOWN
         CMB R20,=0
         JNZ CPLWAIT     ! Suppress duplicate forwarding on hold.
         LDB R20,=1
-        STBD R20,X14,CPLODOWN
+        STBD R20,X14,CPDOWN
         STBD R22,=CPKEY
         JMP CPLWAIT
 
 CPLUP   LDMD R14,=BINTAB
         CLB R20
-        STBD R20,X14,CPLODOWN
+        STBD R20,X14,CPDOWN
 
 CPLWAIT LDM R56,=0,1
 CPLDLY  DCM R56
@@ -328,7 +328,7 @@ CPLDLY  DCM R56
 CPLEXIT CLB R20
         STBD R20,=CPCTL
         LDMD R14,=BINTAB
-        STBD R20,X14,CPLODOWN
+        STBD R20,X14,CPDOWN
         BIN
         PAD
         RTN
@@ -1035,7 +1035,7 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
-CPLODOWN BSZ 1       ! B3a foreground test: key-down edge state
+CPDOWN BSZ 1       ! B3a foreground test: key-down edge state
 CPXCNT  BSZ 1           ! prompt-discovery grace count
 CPXRC   BSZ 1           ! last BASIC transfer result (CPXCODE)
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
