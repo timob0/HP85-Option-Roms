@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.06c -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.06d -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -688,13 +688,13 @@ CPXFER  BIN
         STBD R20,X14,CPXRC
         LDB R20,=8D     ! short grace: B can be transient during CCP loop
         STBD R20,X14,CPXCNT
-        JSB X14,CXQRY
+        JSB X14,CXQST
         JMP CXCHK
 
 CXLOOP  LDMD R14,=BINTAB
         JSB X14,CXDLY
         LDB R22,=13       ! status, original transaction
-        JSB X14,CXQRY
+        JSB X14,CXQST
 CXCHK   LDMD R14,=BINTAB
         LDBD R20,X14,CPXPH
         CMB R20,=123      ! S success
@@ -731,7 +731,7 @@ CXRELY JMP CXLOOP      ! near relay, reachable only from CXACT
 ! start CAS; the ESP reports R if BDOS has won the race.
 CXCTRY
         LDB R22,=14      ! decimal 12: cancel pending only
-        JSB X14,CXQRY
+        JSB X14,CXQST
         LDMD R14,=BINTAB
         LDBD R20,X14,CPXPH
         CMB R20,=130      ! X confirms no BDOS start
@@ -792,6 +792,18 @@ CPXCODE BIN
         JSB =CONBIN
         BIN
         PUMD R40,+R12
+        RTN
+
+! Silent transfer-status query wrapper. The Teensy mailbox remains
+! state 2/3 until its final NUL is consumed; only reading the phase and
+! '|' leaves it BUSY, silently dropping the next opcode. Drain EACH
+! START/STATUS/CANCEL reply completely before submitting another opcode.
+! CPXPH is stored in RAM by CXQRY, independent of the trailing text.
+! CPXSTAT/CPABORT diagnostic commands intentionally call CXQRY directly
+! and then print the rest with CPREAD instead.
+CXQST
+        JSB X14,CXQRY
+        JSB X14,CXDRN
         RTN
 
 ! Bounded receive of one mailbox reply. On timeout do NOT claim that
@@ -964,7 +976,7 @@ ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.06c FILE CONTROL"
+VERMSG   ASP "CPM85 0.06d FILE CONTROL"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
 OFFLEN  EQU 21D
