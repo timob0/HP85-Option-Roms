@@ -7,7 +7,7 @@ src = Path(__file__).resolve().parents[1] / "src" / "cpm85.asm"
 text = src.read_text()
 table = text.split("ASCIIS  ", 1)[1].split("\n\nERMSG", 1)[0]
 names = re.findall(r'^\s*ASP\s+"([A-Z]+)"', table, re.M)
-assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT", "CPXCODE", "CPLOOP"], names
+assert names == ["CPM", "CPOFF", "CPVER", "CPCOUNT", "CPLAST", "CPSTATUS", "CPDMNT", "CPDUMNT", "CPRESET", "CPREBOOT", "CPDIMGS", "CPDMK", "CPDCAT", "CPEXPORT", "CPIMPORT", "CPXSTAT", "CPABORT", "CPXCODE", "CPLOOP", "CPKSTS", "CPKCOD", "CPKHIT", "CPKREL", "CPKCHG", "CPKTRN"], names
 assert len(set(names)) == len(names)
 for a in names:
     for b in names:
@@ -15,7 +15,7 @@ for a in names:
             assert not a.startswith(b), (a, b)
 # 0,55 octal = NO arguments, numeric function.  40,55 octal
 # indicates TWO numeric arguments and is only correct for TEST(x,y).
-assert text.count("        BYT 0,55") == 3
+assert text.count("        BYT 0,55") == 9
 assert "        BYT 40,55" not in text
 assert re.search(r"BYT 0,55\s*CNTFUN\s+BIN", text)
 assert re.search(r"BYT 0,55\s*LSTFUN\s+BIN", text)
@@ -55,7 +55,7 @@ for name in ("CPWRDR  BIN", "CPWRIM  BIN"):
     op = text.split(name, 1)[1].split("RTN", 1)[0]
     assert "CMM R32" in op and "POBD R20,+R30" in op and "DCM R32" in op
     assert "CMM R42" not in op and "POBD R20,+R40" not in op
-assert 'VERMSG   ASP "CPM85 0.07b LOOP PROBE"' in text
+assert 'VERMSG   ASP "CPM85 0.07c LOOP PROBE"' in text
 for port in ("177743", "177744", "177745", "177746"):
     assert port in text
 for label in ("CPSTAT", "CPDMNT", "CPUMNT", "CPRESE", "CPRBOT", "CPIMGS", "CPMAKE", "CPCAT"):
@@ -200,7 +200,7 @@ assert "CPXRC   BSZ 1" in text
 assert 'ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"' in text
 startup=text.split("CPMRUN  SAD",1)[1].split("CPALRD  LDM",1)[0]
 assert "LDM R36,=30D,0" in startup
-assert 'VERMSG   ASP "CPM85 0.07b LOOP PROBE"' in text
+assert 'VERMSG   ASP "CPM85 0.07c LOOP PROBE"' in text
 print("PASS: B2d v0.06a silent file statements, trappable errors, CPXCODE, immediate busy cancellation")
 
 # Fail-safe: exhausting the unknown/armed grace MUST fall through into
@@ -215,7 +215,7 @@ print("PASS: bounded unknown CCP wait ends in atomic CANCEL before BASIC error")
 # instant cancellation; transition grace is bounded before CANCEL.
 assert "CMB R20,=102      ! B could also be a transient CCP transition\n        JZR CXWAIT" in transfer
 assert "JNZ CXLOOP\nCXBUSY  LDB R20,=1" in transfer
-assert 'VERMSG   ASP "CPM85 0.07b LOOP PROBE"' in text
+assert 'VERMSG   ASP "CPM85 0.07c LOOP PROBE"' in text
 print("PASS: v0.06b safe CCP transient debounce")
 
 # v0.06c optional export destination, HP-85 four-byte string stack.
@@ -258,3 +258,20 @@ assert "STBD R22,X14,KLAST" in probe
 assert "STBD R20,X14,KCOUNT" in probe
 assert probe.index("CMB R22,=207") < probe.index("STBD R22,=CPKEY")
 print("PASS: B3a separate foreground polling probe and K8 local detach")
+
+# v0.07c observes KEYSTS and KEYHIT on every polling iteration, not
+# only after the first accepted edge. Preserve user-proven K8 exit.
+for func,label in [("FSTATS","STVAL"),("FCODE","CDVAL"),("FHIT","HTVAL"),
+                   ("FRELS","KRELS"),("FCHGS","KCHGS"),("FTRNS","KTRNS")]:
+    assert f"DEF {func}" in text
+    assert f"        LDBD R36,X14,{label}" in text
+    assert re.search(r"BYT 0,55\s+"+func+r"\s+BIN",text)
+assert "CPLTOP  LDBD R22,=KEYSTS" in probe
+assert "LDBD R24,=KEYHIT" in probe
+assert "LDBD R26,=KEYCOD" in probe
+assert "STBD R22,X14,STVAL" in probe
+assert "STBD R24,X14,HTVAL" in probe
+assert "STBD R26,X14,CDVAL" in probe
+assert "CMB R20,R24" in probe and "CMB R20,R22" in probe
+assert "STBD R20,X14,KRELS" in probe
+print("PASS: v0.07c raw key snapshots and key transition diagnostics")
