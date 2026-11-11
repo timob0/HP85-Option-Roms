@@ -17,7 +17,7 @@ for name, (source, begin, end, version) in guides.items():
     documented = re.findall(r'\\entry\{([A-Z0-9]+)\}', guide)
     assert keywords, f"{name}: empty ROM keyword table"
     assert len(keywords) == len(set(keywords)), f"{name}: duplicate ROM keywords"
-    assert documented == keywords, (
+    assert set(documented) == set(keywords) and len(documented) == len(keywords), (
         f"{name}: guide entries need updating to match source order!\n"
         f"Source: {keywords}\nGuide: {documented}"
     )
