@@ -253,6 +253,9 @@ assert "LDBD R22,=KEYCOD" in probe and "CMB R22,=207" in probe
 assert "STBD R22,=CPKEY" in probe and "STBD R20,=CPCTL" in probe
 assert "JSB =EOJ2" not in probe and "JSB =HPOUT" not in probe
 assert "JMP CPLTOP" in probe and "PAD" in probe and "RTN" in probe
+assert "JMP CPLBACK" in probe and "CPLBACK JMP CPLTOP" in probe
+assert probe.index("CPLBACK JMP CPLTOP") < probe.index("CPLHTOK LDBD")
+assert "JMP CPLHTOK   ! Skip the backward-jump relay" in probe
 assert "ADM R54,=1,0" in probe and "CMM R54,=0,100" in probe
 assert "STBD R22,X14,KLAST" in probe
 assert "STBD R20,X14,KCOUNT" in probe
