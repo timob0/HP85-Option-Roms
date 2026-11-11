@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.07a -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.07b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -26,7 +26,7 @@
 !       CPIMPORT "A_STAT.COM","F:STAT.COM"  ! quiet on success, BASIC error on failure
 !       CPEXPORT "F:STAT.COM"              ! quiet on success
 !       CPXCODE        ! last transfer status: 0/1/2/3/4
-!       CPLOOP         ! experimental foreground keyboard loop ONLY; no printer yet
+!       CPLOOP         ! experimental foreground keyboard loop and scan diagnostics
 !
 ! CPM, CPOFF, CPVER, CPCOUNT and CPLAST diverge at character three;
 ! HP BASIC's abbreviated keyword matching makes CPMCOUNT collide with CPM.
@@ -293,6 +293,8 @@ CPLOOP  SAD
         JNZ CPBUSY       ! A foreign hook owns the editor.
         CLB R20
         STBD R20,X14,CPDOWN
+        STBD R20,X14,KCOUNT   ! Count physical down-edges in this probe.
+        STBD R20,X14,KLAST    ! Hold last observed KEYCOD (raw).
         LDM R26,=LPMSG
         ADM R26,R14
         LDM R36,=24D,0
@@ -314,6 +316,10 @@ CPLTOP  LDBD R22,=KEYSTS
         JNZ CPLWAIT     ! Suppress duplicate forwarding on hold.
         LDB R20,=1
         STBD R20,X14,CPDOWN
+        STBD R22,X14,KLAST
+        LDBD R20,X14,KCOUNT
+        ADB R20,=1
+        STBD R20,X14,KCOUNT
         STBD R22,=CPKEY
         JMP CPLWAIT
 
@@ -1052,7 +1058,7 @@ ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.07a LOOP PROBE"
+VERMSG   ASP "CPM85 0.07b LOOP PROBE"
 LPMSG    ASP "CPLOOP TEST - K8 TO EXIT"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
