@@ -6,7 +6,7 @@
 \tableofcontents\newpage
 \section{Getting Started}
 PRINTER85 drives external printers and optionally replaces the HP-85's internal COPY and PAPER ADVANCE keys. The ROM does not take over these keys automatically.
-\setup{EBTKS}Copy the built PRINTER85 option-ROM image (ROM 0241 octal) to the SD-card ROM directory and enable it in CONFIG.TXT. Reboot to load. Connect your printer on HP-IB and use its selected device address in \texttt{PRTSET}.
+\setup{EBTKS}Copy the built PRINTER85 option-ROM image (ROM 0241 octal) to the SD-card \texttt{/roms85} directory and enable it in your existing \texttt{CONFIG.TXT}. Reboot to load. Connect your printer on HP-IB and use its selected device address in \texttt{PRTSET}.
 \setup{Drivers}Driver 1: HP ThinkJet 2225A in HP control-sequence mode (switch 5 DOWN). Driver 2: SII IFD501/CAPD345A thermal printer. For SII paper cutting, enable the printer's autocutter using its persistent printer configuration software.
 \setup{First test}
 \begin{verbatim}
