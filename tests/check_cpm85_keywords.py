@@ -248,7 +248,7 @@ print("PASS: full mailbox NUL drain on START/STATUS/CANCEL while diagnostics ret
 
 # B3a experimental foreground keyboard session: separate from known-good CPM.
 probe=text.split("CPLOOP  SAD",1)[1].split("! Optional manual release",1)[0]
-assert "LDBD R22,=KEYSTS" in probe and "ANB R22,=2" in probe
+assert "LDBD R22,=KEYSTS" in probe and "ANM R22,=2" in probe
 assert "LDBD R22,=KEYCOD" in probe and "CMB R22,=207" in probe
 assert "STBD R22,=CPKEY" in probe and "STBD R20,=CPCTL" in probe
 assert "JSB =EOJ2" not in probe and "JSB =HPOUT" not in probe
