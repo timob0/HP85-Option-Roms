@@ -1,3 +1,27 @@
+## 2026-11-11 — v0.06d duplicate-import protection physical regression
+
+User confirmed on physical HP-85 with B2d/CPM85 v0.06d that
+attempting `CPIMPORT` over a **CP/M destination filename that
+already exists** raises standard HP BASIC **Error 67: FILE NAME**.
+This is the expected CREATE-NEW/no-overwrite refusal.
+
+The user did not supply a `CPXCODE` value for this specific test
+(expected code **2**), nor a fresh binary comparison of the original
+destination; record these as unverified rather than implying the file
+was independently read back.
+
+Other newly confirmed v0.06d physical tests:
+- literal SD import to new CP/M F: destination succeeds;
+- optional named CPEXPORT on A:PIP.COM to SD PIPB2D2.COM succeeds;
+- busy Multiplan import raises Error 74 STALL and CPXCODE=1.
+
+Outstanding checks if desired before closing B2d: no delayed write
+after busy rejection, optional SD export no-overwrite with exact
+explicit destination, and BASIC ON ERROR integration. No merge
+to main without the user's approval.
+
+---
+
 ## 2026-11-11 — v0.06d hardware busy-program regression passed
 
 User tested `CPIMPORT` on real HP-85 while CP/M was running Multiplan:
