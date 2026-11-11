@@ -1,7 +1,7 @@
 name: CPM85 keyboard LOADBIN experiment
 on:
   push:
-    branches: [feature/cpm85-keyboard-capture, feature/cpm85-drive-control, feature/cpm85-catalog, feature/cpm85-esp-reboot, feature/cpm-file-transfer-b2d]
+    branches: [feature/cpm85-keyboard-capture, feature/cpm85-drive-control, feature/cpm85-catalog, feature/cpm85-esp-reboot, feature/cpm-file-transfer-b2d, feature/cpm-hpib-print-bridge]
   workflow_dispatch:
 jobs:
   assemble:
