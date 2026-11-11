@@ -1,3 +1,20 @@
+## 2026-11-11 — v0.06d hardware busy-program regression passed
+
+User tested `CPIMPORT` on real HP-85 while CP/M was running Multiplan:
+the HP BASIC command raised **Error 74: STALL**, and `CPXCODE` returned
+**1** (CP/M not idle). This is the intended silent-on-success /
+trappable-error convention, and verifies that v0.06d's reply-draining
+change did not break the busy rejection pathway.
+
+The earlier v0.06d physical test confirmed named `CPEXPORT` to SD
+(`A:PIP.COM` -> `PIPB2D2.COM`) and importing that SD file as a new
+file on F:. Outstanding explicit confirmation: destination absent after
+busy rejection (no delayed write), BASIC `ON ERROR` handler behavior,
+and overwrite protection with an explicitly named SD export.
+No merge to main without user approval.
+
+---
+
 ## 2026-11-11 — User-confirmed v0.06d physical HP-85 export/import success
 
 After rebuilding and loading CPM85 **v0.06d** with the previously installed
