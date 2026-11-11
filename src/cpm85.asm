@@ -277,8 +277,8 @@ CPMRET  BIN
 ! status registers stay responsive while the HP BASIC editor is not
 ! servicing CHIDLE. K8 never reaches CP/M. No CHIDLE hook is touched.
 !
-! If the physical keyboard status is NOT polled correctly while a
-! statement is running, HP RESET is the experimental escape hatch.
+! The loop has a bounded automatic exit; HP RESET remains the last
+! recovery option if runtime keyboard polling or BASIC itself wedges.
 ! Never run this test with unsaved HP BASIC work in memory.
 ! ---------------------------------------------------------------
         BYT 241
@@ -300,6 +300,7 @@ CPLOOP  SAD
 
         LDB R20,=1
         STBD R20,=CPCTL  ! Attach HP keyboard input, no CHIDLE use.
+        LDM R54,=0,0    ! Experimental safety watchdog counter.
 
 CPLTOP  LDBD R22,=KEYSTS
         ANM R22,=2      ! HP depressed flag, bit 1.
@@ -323,6 +324,9 @@ CPLUP   LDMD R14,=BINTAB
 CPLWAIT LDM R56,=0,1
 CPLDLY  DCM R56
         JNZ CPLDLY
+        ADM R54,=1,0
+        CMM R54,=0,100  ! 16384 bounded idle iterations.
+        JZR CPLEXIT     ! Automatic exit if K8 polling is ineffective.
         JMP CPLTOP
 
 CPLEXIT CLB R20
