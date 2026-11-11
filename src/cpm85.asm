@@ -1,5 +1,5 @@
 ! ======================================================================
-! CPM85 v0.07b -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
+! CPM85 v0.07c -- HP-85 KEYBOARD + CP/M DRIVE/IMAGE/FILE CONTROL
 !
 ! v0.01b HP-85 capture/release + CPCOUNT/CPLAST proven on hardware.
 ! v0.02a adds only two EBTKS write-only I/O ports:
@@ -81,6 +81,12 @@ PARSE   BYT 0,0
         DEF NOPARS    ! CPABORT
         BSZ 2         ! CPXCODE numeric implied function (no parser)
         DEF NOPARS    ! CPLOOP (experimental foreground loop)
+        BSZ 2         ! CPKSTS numeric function
+        BSZ 2         ! CPKCOD numeric function
+        BSZ 2         ! CPKHIT numeric function
+        BSZ 2         ! CPKREL numeric function
+        BSZ 2         ! CPKCHG numeric function
+        BSZ 2         ! CPKTRN numeric function
 
 RUNTIM  BYT 0,0
         DEF CPMRUN
@@ -102,6 +108,12 @@ RUNTIM  BYT 0,0
         DEF CPABORT
         DEF CPXCODE
         DEF CPLOOP
+        DEF FSTATS
+        DEF FCODE
+        DEF FHIT
+        DEF FRELS
+        DEF FCHGS
+        DEF FTRNS
         BYT 377,377
 
 ASCIIS  ASP "CPM"
@@ -123,6 +135,12 @@ ASCIIS  ASP "CPM"
         ASP "CPABORT"
         ASP "CPXCODE"
         ASP "CPLOOP"
+        ASP "CPKSTS"
+        ASP "CPKCOD"
+        ASP "CPKHIT"
+        ASP "CPKREL"
+        ASP "CPKCHG"
+        ASP "CPKTRN"
 
 ERMSG   BYT 377
 
@@ -295,6 +313,17 @@ CPLOOP  SAD
         STBD R20,X14,CPDOWN
         STBD R20,X14,KCOUNT   ! Count physical down-edges in this probe.
         STBD R20,X14,KLAST    ! Hold last observed KEYCOD (raw).
+        STBD R20,X14,KRELS    ! Number of observed releases after a down-edge.
+        STBD R20,X14,KCHGS    ! KEYHIT sampled-value changes.
+        STBD R20,X14,KTRNS    ! Raw KEYSTS sampled-value changes.
+        LDBD R22,=KEYSTS
+        STBD R22,X14,STVAL
+        STBD R22,X14,STPREV
+        LDBD R22,=KEYCOD
+        STBD R22,X14,CDVAL
+        LDBD R22,=KEYHIT
+        STBD R22,X14,HTVAL
+        STBD R22,X14,HTPREV
         LDM R26,=LPMSG
         ADM R26,R14
         LDM R36,=24D,0
@@ -304,13 +333,37 @@ CPLOOP  SAD
         STBD R20,=CPCTL  ! Attach HP keyboard input, no CHIDLE use.
         LDM R54,=0,0    ! Experimental safety watchdog counter.
 
+! Take unconditional snapshots on EVERY iteration (including K8) to
+! distinguish stale status, raw KEYCOD, and BASIC-decoded KEYHIT.
+! KEYSTS bit 1 indicates depressed, but we also track *any* raw change.
 CPLTOP  LDBD R22,=KEYSTS
-        ANM R22,=2      ! HP depressed flag, bit 1.
-        JZR CPLUP
-        LDBD R22,=KEYCOD
-        CMB R22,=207    ! K8 pressed, 0207 octal.
-        JZR CPLEXIT
+        LDBD R24,=KEYHIT
+        LDBD R26,=KEYCOD
         LDMD R14,=BINTAB
+        STBD R22,X14,STVAL
+        STBD R24,X14,HTVAL
+        STBD R26,X14,CDVAL
+
+        LDBD R20,X14,STPREV
+        CMB R20,R22
+        JZR CPLSTOK
+        STBD R22,X14,STPREV
+        LDBD R20,X14,KTRNS
+        ADB R20,=1
+        STBD R20,X14,KTRNS
+CPLSTOK LDBD R20,X14,HTPREV
+        CMB R20,R24
+        JZR CPLHTOK
+        STBD R24,X14,HTPREV
+        LDBD R20,X14,KCHGS
+        ADB R20,=1
+        STBD R20,X14,KCHGS
+CPLHTOK LDBD R22,X14,STVAL
+        ANM R22,=2
+        JZR CPLUP
+        LDBD R22,X14,CDVAL
+        CMB R22,=207    ! K8 pressed (0207 octal).
+        JZR CPLEXIT
         LDBD R20,X14,CPDOWN
         CMB R20,=0
         JNZ CPLWAIT     ! Suppress duplicate forwarding on hold.
@@ -324,8 +377,14 @@ CPLTOP  LDBD R22,=KEYSTS
         JMP CPLWAIT
 
 CPLUP   LDMD R14,=BINTAB
+        LDBD R20,X14,CPDOWN
+        CMB R20,=0
+        JZR CPLWAIT
         CLB R20
         STBD R20,X14,CPDOWN
+        LDBD R20,X14,KRELS
+        ADB R20,=1
+        STBD R20,X14,KRELS
 
 CPLWAIT LDM R56,=0,1
 CPLDLY  DCM R56
@@ -341,6 +400,70 @@ CPLEXIT CLB R20
         STBD R20,X14,CPDOWN
         BIN
         PAD
+        RTN
+
+! B3a diagnostic numeric functions -- eight-bit snapshots/counters.
+! The returned values belong ONLY to the last completed CPLOOP run,
+! except for CPCOUNT/CPLAST which normal CPM overwrites as usual.
+! Use the established no-argument 0,55 HP REAL return ABI.
+        BYT 0,55
+FSTATS  BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,STVAL
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
+        RTN
+
+        BYT 0,55
+FCODE   BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,CDVAL
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
+        RTN
+
+        BYT 0,55
+FHIT    BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,HTVAL
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
+        RTN
+
+        BYT 0,55
+FRELS   BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,KRELS
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
+        RTN
+
+        BYT 0,55
+FCHGS   BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,KCHGS
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
+        RTN
+
+        BYT 0,55
+FTRNS   BIN
+        LDMD R14,=BINTAB
+        LDM R36,=0,0
+        LDBD R36,X14,KTRNS
+        JSB =CONBIN
+        BIN
+        PUMD R40,+R12
         RTN
 
 ! Optional manual release for the case of an external keyboard injector.
@@ -1045,7 +1168,15 @@ CPRBUD  BSZ 2           ! exactly R56-R57, survives CRT calls
 CPENDNL BSZ 1           ! was last output byte an HP-native newline?
 CPNMADR BSZ 2           ! CPDMK original HP string pointer (2 bytes)
 CPNMLEN BSZ 2           ! CPDMK original HP string length  (2 bytes)
-CPDOWN BSZ 1       ! B3a foreground test: key-down edge state
+CPDOWN BSZ 1       ! Foreground probe: held-key edge state
+STVAL  BSZ 1       ! Last raw KEYSTS sample
+CDVAL  BSZ 1       ! Last raw KEYCOD sample (includes K8)
+HTVAL  BSZ 1       ! Last decoded KEYHIT sample
+STPREV BSZ 1       ! Previous KEYSTS sample
+HTPREV BSZ 1       ! Previous KEYHIT sample
+KRELS  BSZ 1       ! Key-up observations after accepted down-edge
+KCHGS  BSZ 1       ! KEYHIT sample changes, modulo 256
+KTRNS  BSZ 1       ! KEYSTS raw sample changes, modulo 256
 CPXCNT  BSZ 1           ! prompt-discovery grace count
 CPXRC   BSZ 1           ! last BASIC transfer result (CPXCODE)
 CPXPH   BSZ 1           ! machine status from Teensy reply prefix
@@ -1058,7 +1189,7 @@ ONMSG   ASP "CONNECTED TO CP/M - K8 TO EXIT"
 BSYMSG   ASP "CPM85: KEYBOARD HOOK BUSY (PRTKEYS 0?)"
 OFFMSG   ASP "CPM85 KEY CAPTURE OFF"
 ALRMSG  ASP "CPM85 KEY CAPTURE ACTIVE"
-VERMSG   ASP "CPM85 0.07b LOOP PROBE"
+VERMSG   ASP "CPM85 0.07c LOOP PROBE"
 LPMSG    ASP "CPLOOP TEST - K8 TO EXIT"
 ONLEN   EQU 42D
 BSYLEN  EQU 38D
